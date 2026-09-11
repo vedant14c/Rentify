@@ -1,0 +1,337 @@
+.list-property-page {
+  min-height: calc(100vh - 76px);
+  padding: 40px 0 85px;
+  background:
+    radial-gradient(
+      circle at 5% 10%,
+      rgba(37, 99, 235, 0.08),
+      transparent 25%
+    ),
+    #f5f7fb;
+}
+
+.property-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 28px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #475569;
+  background: white;
+  box-shadow: 0 5px 15px rgba(15, 23, 42, 0.06);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.property-page-heading {
+  max-width: 700px;
+  margin-bottom: 35px;
+}
+
+.property-page-heading > span {
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.7px;
+}
+
+.property-page-heading h1 {
+  margin: 6px 0 8px;
+  color: #0f172a;
+  font-size: clamp(2.1rem, 5vw, 3.2rem);
+  letter-spacing: -1.3px;
+}
+
+.property-page-heading p {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.property-form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 28px;
+}
+
+.property-form-card {
+  padding: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 13px 35px rgba(15, 23, 42, 0.08);
+}
+
+.property-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 23px;
+}
+
+.property-section-heading > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  color: white;
+  background: linear-gradient(135deg, #2563eb, #6366f1);
+}
+
+.property-section-heading h2 {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.property-section-heading p {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.property-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 17px;
+}
+
+.property-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.property-full-width {
+  grid-column: 1 / -1;
+}
+
+.property-field input,
+.property-field select,
+.property-field textarea {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  outline: none;
+  color: #0f172a;
+  background: #f8fafc;
+  resize: vertical;
+  transition: 0.25s ease;
+}
+
+.property-field input:focus,
+.property-field select:focus,
+.property-field textarea:focus {
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.property-form-divider {
+  height: 1px;
+  margin: 32px 0;
+  background: #e2e8f0;
+}
+
+.property-submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 28px;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  background: linear-gradient(135deg, #2563eb, #5b4de8);
+  box-shadow: 0 12px 27px rgba(37, 99, 235, 0.28);
+  font-size: 12px;
+  font-weight: 800;
+  transition: 0.3s ease;
+}
+
+.property-submit-button:hover {
+  box-shadow: 0 17px 34px rgba(37, 99, 235, 0.42);
+  transform: translateY(-2px);
+}
+
+.property-help-card {
+  position: sticky;
+  top: 100px;
+  padding: 27px;
+  border: 1px solid rgba(147, 197, 253, 0.16);
+  border-radius: 18px;
+  color: white;
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgba(37, 99, 235, 0.4),
+      transparent 35%
+    ),
+    linear-gradient(145deg, #071426, #10244a);
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.25);
+}
+
+.property-help-icon {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  background: linear-gradient(135deg, #2563eb, #6366f1);
+  font-size: 22px;
+}
+
+.property-help-card h2 {
+  font-size: 19px;
+}
+
+.property-help-card > p {
+  margin: 8px 0 21px;
+  color: #aebbd0;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.property-help-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.property-help-card > div span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #dbeafe;
+  font-size: 10px;
+}
+
+.property-help-card > div svg {
+  color: #4ade80;
+}
+
+.property-help-card > small {
+  display: block;
+  margin-top: 22px;
+  padding-top: 17px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  color: #8392aa;
+  font-size: 9px;
+}
+
+.property-success-page {
+  display: grid;
+  min-height: calc(100vh - 76px);
+  padding: 30px;
+  place-items: center;
+  background: #f5f7fb;
+}
+
+.property-success-card {
+  width: min(550px, 100%);
+  padding: 48px 35px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.14);
+  text-align: center;
+}
+
+.property-success-card > span {
+  display: grid;
+  width: 75px;
+  height: 75px;
+  margin: 0 auto 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #16a34a;
+  background: #dcfce7;
+  font-size: 36px;
+}
+
+.property-success-card > p {
+  color: #16a34a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+}
+
+.property-success-card h1 {
+  margin: 7px 0 13px;
+}
+
+.property-pending-message {
+  padding: 11px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #b45309;
+  background: #fffbeb;
+  font-size: 10px;
+}
+
+.property-success-actions {
+  display: flex;
+  justify-content: center;
+  gap: 11px;
+  margin-top: 25px;
+}
+
+.property-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 11px 18px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .property-form-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .property-help-card {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .property-form-card {
+    padding: 23px;
+  }
+
+  .property-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .property-full-width {
+    grid-column: auto;
+  }
+
+  .property-success-actions {
+    flex-direction: column;
+  }
+}
+.property-form-error {
+  margin-bottom: 22px;
+  padding: 14px 17px;
+  color: #b42332;
+  font-weight: 600;
+  border: 1px solid #ffc2c8;
+  border-radius: 13px;
+  background: #fff0f2;
+}
+
+.property-submit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
