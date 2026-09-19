@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Frontend dependencies and generated build
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.vite/
+
+# Backend build output
+OfficeSpaces/target/
+OfficeSpaces/bin/
+OfficeSpaces/.metadata/
+
+# Environment files / secrets
+.env
+.env.*
+Frontend/.env
+Frontend/.env.*
+OfficeSpaces/.env
+OfficeSpaces/.env.*
+
+# Local backups
+Frontend_backup/
+OfficeSpaces_backup/
+OfficeSpaces_local_backup/
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
