@@ -1,0 +1,40 @@
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Java / Spring Boot
+# =========================
+**/target/
+**/bin/
+**/.metadata/
+
+# =========================
+# React / Vite
+# =========================
+**/node_modules/
+Frontend/dist/
+Frontend/.vite/
+
+# =========================
+# IDE / editor
+# =========================
+.vscode/
+.idea/
+*.iml
+
+# =========================
+# Local backups
+# =========================
+Frontend_backup/
+OfficeSpaces_backup/
+OfficeSpaces_local_backup/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
