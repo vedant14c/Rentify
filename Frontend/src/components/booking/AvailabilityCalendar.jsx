@@ -21,6 +21,7 @@ export function AvailabilityCalendar({
   closingTime = "18:00",
   slotDurationMinutes = 60,
   bookedRanges = [],
+  bookedTimeSlots = [],
   startDate,
   endDate,
   startTime,
@@ -34,44 +35,80 @@ export function AvailabilityCalendar({
 
   const generateHourlySlots = () => {
     const slots = [];
-    const parseHour = (t) => {
-      if (!t) return 9;
-      let [h] = t.split(":").map(Number);
-      return h;
+    const parseMinutes = (t) => {
+      const [hours, minutes] = String(t || "09:00").split(":").map(Number);
+      return hours * 60 + (minutes || 0);
     };
+    const formatTime = (minutes) =>
+      `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    const formatDisplayTime = (minutes) => {
+      const hour = Math.floor(minutes / 60);
+      const suffix = hour >= 12 ? "PM" : "AM";
+      return `${String(hour % 12 || 12).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")} ${suffix}`;
+    };
+    const startMinutes = parseMinutes(openingTime);
+    const endMinutes = parseMinutes(closingTime);
 
-    const startH = parseHour(openingTime);
-    const endH = parseHour(closingTime);
-
-    for (let h = startH; h < endH; h++) {
-      const formatTimeSlot = (hour) => {
-        const ampm = hour >= 12 ? "PM" : "AM";
-        const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
-        return `${String(formattedHour).padStart(2, "0")}:00 ${ampm}`;
-      };
-
-      const startSlot = formatTimeSlot(h);
-      const endSlot = formatTimeSlot(h + 1);
-      slots.push({ startTime: startSlot, endTime: endSlot, rawHour: h });
+    for (let minutes = startMinutes; minutes + slotDurationMinutes <= endMinutes; minutes += slotDurationMinutes) {
+      slots.push({
+        startTime: formatTime(minutes),
+        endTime: formatTime(minutes + slotDurationMinutes),
+        displayStartTime: formatDisplayTime(minutes),
+        displayEndTime: formatDisplayTime(minutes + slotDurationMinutes),
+        rawMinutes: minutes,
+      });
     }
     return slots;
   };
 
   const hourlySlots = generateHourlySlots();
 
-  const isSlotPast = (rawHour) => {
+  const toMinutes = (value) => {
+    const [hours, minutes] = String(value).split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const formatTimeForSelection = (minutes) =>
+    `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+  const isSlotPast = (rawMinutes) => {
     if (!startDate || startDate !== todayStr) return false;
-    const currentHour = new Date().getHours();
-    return rawHour <= currentHour;
+    const now = new Date();
+    return rawMinutes < now.getHours() * 60 + now.getMinutes();
   };
 
   const isSlotBooked = (slot) => {
-    if (!startDate || !bookedRanges.length) return false;
-    return bookedRanges.some((range) => {
-      const start = normalizeDateString(range.startDate || range.proposedStart);
-      const end = normalizeDateString(range.endDate || range.proposedEnd);
-      return startDate >= start && startDate <= end;
+    return (bookedTimeSlots || []).some((bookedSlot) => {
+      const start = String(bookedSlot.startTime || "").slice(0, 5);
+      const end = String(bookedSlot.endTime || "").slice(0, 5);
+      return toMinutes(start) < toMinutes(slot.endTime)
+        && toMinutes(end) > toMinutes(slot.startTime);
     });
+  };
+
+  const handleHourlyClick = (slot) => {
+    if (!startTime || !endTime) {
+      onHourlySlotSelect(slot.startTime, slot.endTime);
+      return;
+    }
+
+    const currentStart = toMinutes(startTime);
+    const currentEnd = toMinutes(endTime);
+    const nextStart = Math.min(currentStart, slot.rawMinutes);
+    const nextEnd = Math.max(currentEnd, slot.rawMinutes + slotDurationMinutes);
+    const containsBookedSlot = hourlySlots.some((candidate) => {
+      return candidate.rawMinutes >= nextStart
+        && candidate.rawMinutes < nextEnd
+        && isSlotBooked(candidate);
+    });
+
+    if (containsBookedSlot) {
+      setSelectionError("Your selected time range contains a booked slot.");
+      return;
+    }
+
+    setSelectionError("");
+    onHourlySlotSelect(formatTimeForSelection(nextStart), formatTimeForSelection(nextEnd));
   };
 
   const year = currentMonth.getFullYear();
@@ -94,7 +131,7 @@ export function AvailabilityCalendar({
       const start = normalizeDateString(range.startDate || range.proposedStart);
       const end = normalizeDateString(range.endDate || range.proposedEnd);
       if (!start || !end) return false;
-      return dateStr >= start && dateStr <= end;
+      return dateStr >= start && dateStr < end;
     });
 
     if (matchedRange) {
@@ -134,7 +171,7 @@ export function AvailabilityCalendar({
       const hasInternalOverlap = bookedRanges.some((range) => {
         const start = normalizeDateString(range.startDate || range.proposedStart);
         const end = normalizeDateString(range.endDate || range.proposedEnd);
-        return newStart <= end && newEnd >= start;
+        return newStart < end && newEnd > start;
       });
 
       if (hasInternalOverlap) {
@@ -162,15 +199,25 @@ export function AvailabilityCalendar({
             <FiClock style={{ color: "#2563eb" }} />
             <span>Select Hourly Time Slot ({openingTime} – {closingTime})</span>
           </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem", fontSize: "0.82rem", color: "#475569" }}>
+            <span>🟩 Available</span>
+            <span>🔵 Selected</span>
+            <span>🟥 Booked</span>
+            <span>⚪ Past</span>
+          </div>
 
           {!startDate ? (
             <p style={{ color: "#64748b", fontSize: "0.9rem" }}>Please select a booking date above to view available hourly slots.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "0.75rem" }}>
               {hourlySlots.map((slot, idx) => {
-                const past = isSlotPast(slot.rawHour);
+                const past = isSlotPast(slot.rawMinutes);
                 const booked = isSlotBooked(slot);
-                const isSelected = startTime === slot.startTime && endTime === slot.endTime;
+                const selectedStart = startTime ? toMinutes(startTime) : -1;
+                const selectedEnd = endTime ? toMinutes(endTime) : -1;
+                const isSelected = selectedStart >= 0
+                  && slot.rawMinutes >= selectedStart
+                  && slot.rawMinutes < selectedEnd;
                 const isDisabled = past || booked;
 
                 return (
@@ -178,7 +225,7 @@ export function AvailabilityCalendar({
                     key={idx}
                     type="button"
                     disabled={isDisabled}
-                    onClick={() => onHourlySlotSelect(slot.startTime, slot.endTime)}
+                    onClick={() => handleHourlyClick(slot)}
                     style={{
                       padding: "0.6rem 0.75rem",
                       borderRadius: "8px",
@@ -191,8 +238,7 @@ export function AvailabilityCalendar({
                       textAlign: "center",
                     }}
                   >
-                    <div>{slot.startTime}</div>
-                    <div style={{ fontSize: "0.75rem", fontWeight: "400", opacity: 0.8 }}>to {slot.endTime}</div>
+                    <div>{slot.displayStartTime} – {slot.displayEndTime}</div>
                     {booked && <div style={{ fontSize: "0.7rem", color: "#dc2626" }}>❌ Reserved</div>}
                     {past && <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Past</div>}
                   </button>

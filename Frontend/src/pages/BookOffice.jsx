@@ -4,6 +4,7 @@ import {
   FiArrowLeft,
   FiCalendar,
   FiCheckCircle,
+  FiClock,
   FiCreditCard,
   FiHome,
   FiLoader,
@@ -34,12 +35,24 @@ function getStoredUser() {
   }
 }
 
+function isOwner(user) {
+  return String(user?.role || localStorage.getItem("role") || "").toUpperCase() === "OWNER";
+}
+
 function extractAvailabilityData(availabilityRes) {
   if (!availabilityRes) return { bookedDateRanges: [] };
-  if (availabilityRes.data && availabilityRes.data.bookedDateRanges) {
-    return availabilityRes.data;
+  const data = availabilityRes.data || availabilityRes;
+  if (Array.isArray(data)) {
+    return { bookedDateRanges: data, bookedTimeSlots: [] };
   }
-  return availabilityRes;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    return {
+      ...data,
+      bookedDateRanges: Array.isArray(data.bookedDateRanges) ? data.bookedDateRanges : [],
+      bookedTimeSlots: Array.isArray(data.bookedTimeSlots) ? data.bookedTimeSlots : [],
+    };
+  }
+  return { bookedDateRanges: [], bookedTimeSlots: [] };
 }
 
 function BookOffice() {
@@ -65,18 +78,19 @@ function BookOffice() {
     phone: savedUser?.phone || "",
     bookingDate: "",
     endDate: "",
-    startTime: "09:00 AM",
-    endTime: "05:00 PM",
+    startTime: "",
+    endTime: "",
     teamSize: "1",
     residents: "1",
     requirements: "",
+    visitTimeSlot: "Morning (10:00 AM - 01:00 PM)",
   });
 
   const minimumDate = formatInputDate(new Date());
 
-  const fetchAvailabilityData = async () => {
+  const fetchAvailabilityData = async (date) => {
     try {
-      const rawRes = await getPropertyAvailability(Number(id));
+      const rawRes = await getPropertyAvailability(Number(id), date);
       const availData = extractAvailabilityData(rawRes);
       setAvailability(availData);
       const ranges = availData?.bookedDateRanges || (Array.isArray(availData) ? availData : []);
@@ -129,11 +143,20 @@ function BookOffice() {
     };
   }, [id]);
 
-  const propertyTypeNormalized = String(office?.propertyType || office?.type || "Office").trim().toLowerCase();
+  const rawListingType = String(office?.listingType || "RENT").toUpperCase();
+  const isForSale = rawListingType === "SALE" || rawListingType === "BUY";
+  const propertyTypeNormalized = String(office?.propertyType || office?.type || "").trim().toLowerCase();
   const isOffice = propertyTypeNormalized === "office";
   const isResidential = ["house", "apartment", "villa"].includes(propertyTypeNormalized);
   const priceUnitNormalized = String(office?.priceUnit || "MONTH").toUpperCase();
-  const isHourly = isOffice && priceUnitNormalized === "HOUR";
+  const isHourly = !isForSale && priceUnitNormalized === "HOUR";
+
+  useEffect(() => {
+    if (isHourly && formData.bookingDate) {
+      setFormData((prev) => ({ ...prev, startTime: "", endTime: "" }));
+      fetchAvailabilityData(formData.bookingDate);
+    }
+  }, [formData.bookingDate, isHourly]);
 
   const handleDateRangeSelect = (start, end) => {
     setFormData((prev) => ({
@@ -188,6 +211,44 @@ function BookOffice() {
       return;
     }
 
+    if (isForSale) {
+      if (!formData.bookingDate) {
+        setError("Please choose your preferred date for the property visit.");
+        window.scrollTo({ top: 250, behavior: "smooth" });
+        return;
+      }
+
+      const proposedStart = formData.bookingDate;
+      const proposedEnd = formData.bookingDate;
+      const message = `PURCHASE INQUIRY | Preferred Visit: ${formData.bookingDate} (${formData.visitTimeSlot || "Morning"}) | Name: ${formData.fullName} | Phone: ${formData.phone} | Note: ${formData.requirements || "Interested in purchasing this property"}`.slice(0, 250);
+
+      try {
+        setSubmitting(true);
+        setError("");
+        const createdRequest = await createBookingRequest({
+          propertyId: office.propertyId || office.id,
+          userId: userIdNum,
+          requestType: "PURCHASE",
+          proposedStart,
+          proposedEnd,
+          startTime: null,
+          endTime: null,
+          teamSize: null,
+          message,
+        });
+
+        setConfirmedRequestId(createdRequest.requestId);
+        setSubmitted(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (requestError) {
+        console.error("Purchase inquiry error:", requestError);
+        setError(requestError.response?.data?.message || "Failed to submit purchase inquiry. Please try again.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (!formData.bookingDate) {
       setError(`Please click a ${isHourly ? "booking date" : "start date"} on the calendar below.`);
       window.scrollTo({ top: 250, behavior: "smooth" });
@@ -196,6 +257,11 @@ function BookOffice() {
 
     const proposedStart = formData.bookingDate;
     const proposedEnd = isHourly ? formData.bookingDate : formData.endDate || formData.bookingDate;
+
+    if (isHourly && (!formData.startTime || !formData.endTime)) {
+      setError("Please select an available hourly slot.");
+      return;
+    }
 
     if (!isHourly && proposedEnd < proposedStart) {
       setError("End date cannot be earlier than start date.");
@@ -216,7 +282,7 @@ function BookOffice() {
       `Phone: ${formData.phone}`,
     ];
 
-    if (isOffice) {
+    if (isHourly || isOffice) {
       messageParts.push(`Team: ${formData.teamSize || 1}`);
     } else {
       messageParts.push(`Residents: ${formData.residents || 1}`);
@@ -246,11 +312,28 @@ function BookOffice() {
       setSubmitting(true);
       setError("");
 
+      if (isInstant && confirmedRequestId) {
+        await processRazorpayPayment({
+          requestId: confirmedRequestId,
+          officeName: office.title || office.name,
+          user: savedUser,
+        });
+        navigate("/my-bookings");
+        return;
+      }
+
       const createdRequest = await createBookingRequest({
         propertyId: office.propertyId || office.id,
         userId: userIdNum,
         proposedStart,
         proposedEnd,
+        startTime: isHourly ? formData.startTime : null,
+        endTime: isHourly ? formData.endTime : null,
+        teamSize: isHourly
+          ? formData.teamSize
+          : isResidential
+          ? formData.residents
+          : null,
         message,
       });
 
@@ -270,8 +353,7 @@ function BookOffice() {
           return;
         } catch (payErr) {
           console.warn("Payment modal closed or failed:", payErr);
-          setSubmitted(true);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          setError(payErr.message || "Unable to start payment. Please try again.");
         }
       } else {
         setSubmitted(true);
@@ -317,7 +399,7 @@ function BookOffice() {
         <div>
           <h1>Property unavailable</h1>
           <p>{pageError || "Please select an available property before booking."}</p>
-          <Link to="/offices" className="primary-btn">
+          <Link to="/properties" className="primary-btn">
             Browse Properties
           </Link>
         </div>
@@ -325,7 +407,58 @@ function BookOffice() {
     );
   }
 
+  if (isOwner(savedUser)) {
+    return (
+      <main className="booking-not-found">
+        <div>
+          <h1>Owner booking unavailable</h1>
+          <p>Property owners cannot create rental bookings. Manage your properties from the owner dashboard.</p>
+          <Link to="/owner-dashboard" className="primary-btn">
+            Go to Owner Dashboard
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (submitted) {
+    if (isForSale) {
+      return (
+        <main className="booking-success-page">
+          <div className="booking-success-card">
+            <span className="success-icon" style={{ background: "#ecfdf5", color: "#059669" }}>
+              <FiCheckCircle />
+            </span>
+
+            <p className="success-label" style={{ color: "#059669" }}>PURCHASE INQUIRY SUBMITTED</p>
+
+            <h1>Visit Request Sent!</h1>
+
+            {confirmedRequestId && (
+              <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", padding: "0.75rem 1.25rem", borderRadius: "10px", margin: "1rem auto", fontWeight: "700", display: "inline-block" }}>
+                Inquiry ID: #{confirmedRequestId}
+              </div>
+            )}
+
+            <p>
+              Your purchase inquiry for <strong>{office.title || office.name}</strong> has been delivered to the owner.
+              They have received your preferred visit date (<strong>{formData.bookingDate}</strong>, {formData.visitTimeSlot}) and will reach out to you via phone (<strong>{formData.phone}</strong>) or email.
+            </p>
+
+            <div className="success-actions" style={{ display: "flex", gap: "1rem", justifyContent: "center", marginTop: "1.5rem" }}>
+              <Link to="/my-bookings" className="primary-btn" style={{ background: "#059669" }}>
+                View My Inquiries
+              </Link>
+
+              <Link to="/properties" className="success-secondary-btn">
+                Explore More Properties
+              </Link>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="booking-success-page">
         <div className="booking-success-card">
@@ -389,21 +522,25 @@ function BookOffice() {
   return (
     <main className="booking-page">
       <div className="container">
-        <Link to={`/office-details/${office.propertyId || office.id}`} className="booking-back-link">
+        <Link to={`/property/${office.propertyId || office.id}`} className="booking-back-link">
           <FiArrowLeft />
           Back to property details
         </Link>
 
         <div className="booking-page-heading">
           <span>
-            {isHourly
+            {isForSale
+              ? "PROPERTY PURCHASE INQUIRY"
+              : isHourly
               ? "HOURLY WORKSPACE BOOKING"
               : isResidential
               ? "RESIDENTIAL LEASE APPLICATION"
               : "PROPERTY RENTAL APPLICATION"}
           </span>
           <h1>
-            {isHourly
+            {isForSale
+              ? "Schedule Site Visit & Inquire to Buy"
+              : isHourly
               ? "Reserve Hourly Workspace"
               : isResidential
               ? "Submit Residential Lease Application"
@@ -485,125 +622,195 @@ function BookOffice() {
 
             <div className="form-separator" />
 
-            <div className="form-section-heading">
-              <span>2</span>
-              <div>
-                <h2>
-                  {isHourly
-                    ? "Hourly Slot Selection"
-                    : isResidential
-                    ? "Tenancy & Move-in Dates"
-                    : "Rental Term & Dates"}
-                </h2>
-                <p>
-                  {isHourly
-                    ? "Select your date and available time slot from the calendar below"
-                    : "Click Start date and End date on the calendar below"}
-                </p>
-              </div>
-            </div>
-
-            {/* Availability Calendar Widget */}
-            <AvailabilityCalendar
-              isHourly={isHourly}
-              openingTime={office.openingTime || "09:00"}
-              closingTime={office.closingTime || "18:00"}
-              slotDurationMinutes={office.slotDurationMinutes || 60}
-              bookedRanges={bookedRanges}
-              startDate={formData.bookingDate}
-              endDate={formData.endDate}
-              startTime={formData.startTime}
-              endTime={formData.endTime}
-              onDateRangeSelect={handleDateRangeSelect}
-              onHourlySlotSelect={handleHourlySlotSelect}
-            />
-
-            <div className="booking-form-grid">
-              <label className="form-group">
-                {isHourly ? "Booking Date" : isResidential ? "Move-in Date" : "Rental Starts"}
-                <div className="booking-input">
-                  <FiCalendar />
-                  <input
-                    type="date"
-                    name="bookingDate"
-                    value={formData.bookingDate}
-                    onChange={handleChange}
-                    min={minimumDate}
-                    required
-                  />
+            {isForSale ? (
+              <>
+                <div className="form-section-heading">
+                  <span>2</span>
+                  <div>
+                    <h2>Preferred Visit Date & Time</h2>
+                    <p>Choose when you would like to tour the property in person</p>
+                  </div>
                 </div>
-              </label>
 
-              {!isHourly && (
-                <label className="form-group">
-                  {isResidential ? "Move-out Date" : "Rental Ends"}
-                  <div className="booking-input">
-                    <FiCalendar />
-                    <input
-                      type="date"
-                      name="endDate"
-                      value={formData.endDate}
-                      onChange={handleChange}
-                      min={formData.bookingDate || minimumDate}
-                      required
-                    />
-                  </div>
-                </label>
-              )}
+                <div className="booking-form-grid">
+                  <label className="form-group">
+                    Preferred Visit Date
+                    <div className="booking-input">
+                      <FiCalendar />
+                      <input
+                        type="date"
+                        name="bookingDate"
+                        value={formData.bookingDate}
+                        onChange={handleChange}
+                        min={minimumDate}
+                        required
+                      />
+                    </div>
+                  </label>
 
-              {/* Occupants / Team Size */}
-              {isOffice ? (
-                <label className="form-group booking-full-width">
-                  Team Size
-                  <div className="booking-input">
-                    <FiUsers />
-                    <input
-                      type="number"
-                      name="teamSize"
-                      value={formData.teamSize}
-                      onChange={handleChange}
-                      placeholder="Number of team members"
-                      min="1"
-                      required
-                    />
-                  </div>
-                </label>
-              ) : isResidential ? (
-                <label className="form-group booking-full-width">
-                  Number of Residents
-                  <div className="booking-input">
-                    <FiHome />
-                    <input
-                      type="number"
-                      name="residents"
-                      value={formData.residents}
-                      onChange={handleChange}
-                      placeholder="Number of residents staying"
-                      min="1"
-                      required
-                    />
-                  </div>
-                </label>
-              ) : null}
+                  <label className="form-group">
+                    Preferred Time Window
+                    <div className="booking-input">
+                      <FiClock />
+                      <select
+                        name="visitTimeSlot"
+                        value={formData.visitTimeSlot}
+                        onChange={handleChange}
+                        required
+                        style={{ width: "100%", padding: "12px 0", border: "none", outline: "none", background: "transparent", color: "#0f172a", fontWeight: "600" }}
+                      >
+                        <option value="Morning (10:00 AM - 01:00 PM)">Morning (10:00 AM - 01:00 PM)</option>
+                        <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
+                        <option value="Evening (04:00 PM - 07:00 PM)">Evening (04:00 PM - 07:00 PM)</option>
+                      </select>
+                    </div>
+                  </label>
 
-              <label className="form-group booking-full-width">
-                Additional Requirements
-                <textarea
-                  name="requirements"
-                  value={formData.requirements}
-                  onChange={handleChange}
-                  placeholder="Any special requirements..."
-                  rows="3"
+                  <label className="form-group booking-full-width">
+                    Financing Status & Offer Notes
+                    <textarea
+                      name="requirements"
+                      value={formData.requirements}
+                      onChange={handleChange}
+                      placeholder="E.g., Pre-approved home loan, Cash purchase, or specific questions about the title / amenities..."
+                      rows="3"
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-section-heading">
+                  <span>2</span>
+                  <div>
+                    <h2>
+                      {isHourly
+                        ? "Hourly Slot Selection"
+                        : isResidential
+                        ? "Tenancy & Move-in Dates"
+                        : "Rental Term & Dates"}
+                    </h2>
+                    <p>
+                      {isHourly
+                        ? "Select your date and available time slot from the calendar below"
+                        : "Click Start date and End date on the calendar below"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Availability Calendar Widget */}
+                <AvailabilityCalendar
+                  isHourly={isHourly}
+                  openingTime={office.openingTime || "09:00"}
+                  closingTime={office.closingTime || "18:00"}
+                  slotDurationMinutes={office.slotDurationMinutes || 60}
+                  bookedRanges={bookedRanges}
+                  bookedTimeSlots={availability?.bookedTimeSlots || []}
+                  startDate={formData.bookingDate}
+                  endDate={formData.endDate}
+                  startTime={formData.startTime}
+                  endTime={formData.endTime}
+                  onDateRangeSelect={handleDateRangeSelect}
+                  onHourlySlotSelect={handleHourlySlotSelect}
                 />
-              </label>
-            </div>
 
-            <button type="submit" className="submit-booking-button" disabled={submitting}>
-              {isInstant ? <FiCreditCard /> : <FiCheckCircle />}
+                <div className="booking-form-grid">
+                  <label className="form-group">
+                    {isHourly ? "Booking Date" : isResidential ? "Move-in Date" : "Rental Starts"}
+                    <div className="booking-input">
+                      <FiCalendar />
+                      <input
+                        type="date"
+                        name="bookingDate"
+                        value={formData.bookingDate}
+                        onChange={handleChange}
+                        min={minimumDate}
+                        required
+                      />
+                    </div>
+                  </label>
+
+                  {!isHourly && (
+                    <label className="form-group">
+                      {isResidential ? "Move-out Date" : "Rental Ends"}
+                      <div className="booking-input">
+                        <FiCalendar />
+                        <input
+                          type="date"
+                          name="endDate"
+                          value={formData.endDate}
+                          onChange={handleChange}
+                          min={formData.bookingDate || minimumDate}
+                          required
+                        />
+                      </div>
+                    </label>
+                  )}
+
+                  {/* Occupants / Team Size */}
+                  {isHourly || isOffice ? (
+                    <label className="form-group booking-full-width">
+                      Team Size
+                      <div className="booking-input">
+                        <FiUsers />
+                        <input
+                          type="number"
+                          name="teamSize"
+                          value={formData.teamSize}
+                          onChange={handleChange}
+                          placeholder="Number of team members"
+                          min="1"
+                          required
+                        />
+                      </div>
+                    </label>
+                  ) : isResidential ? (
+                    <label className="form-group booking-full-width">
+                      Number of Residents
+                      <div className="booking-input">
+                        <FiHome />
+                        <input
+                          type="number"
+                          name="residents"
+                          value={formData.residents}
+                          onChange={handleChange}
+                          placeholder="Number of residents staying"
+                          min="1"
+                          required
+                        />
+                      </div>
+                    </label>
+                  ) : null}
+
+                  <label className="form-group booking-full-width">
+                    Additional Requirements
+                    <textarea
+                      name="requirements"
+                      value={formData.requirements}
+                      onChange={handleChange}
+                      placeholder="Any special requirements..."
+                      rows="3"
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            <button
+              type="submit"
+              className="submit-booking-button"
+              disabled={submitting}
+              style={isForSale ? { background: "linear-gradient(135deg, #059669, #10b981)" } : {}}
+            >
+              {isForSale ? <FiCheckCircle /> : isInstant ? <FiCreditCard /> : <FiCheckCircle />}
               {submitting
-                ? isInstant
+                ? isForSale
+                  ? "Submitting Inquiry..."
+                  : isInstant
                   ? "Opening Payment Gateway..."
                   : "Submitting Application..."
+                : isForSale
+                ? "Submit Purchase Inquiry & Request Visit"
                 : isInstant
                 ? "Book & Pay Now"
                 : isResidential
@@ -617,6 +824,8 @@ function BookOffice() {
             property={office}
             isHourly={isHourly}
             isResidential={isResidential}
+            isForSale={isForSale}
+            visitTimeSlot={formData.visitTimeSlot}
             startDate={formData.bookingDate}
             endDate={formData.endDate || formData.bookingDate}
             startTime={formData.startTime}

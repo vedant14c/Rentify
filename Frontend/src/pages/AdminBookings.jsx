@@ -133,9 +133,6 @@ function AdminBookings() {
         ? userResponse
         : [];
 
-      console.log("[FRONTEND LOG] AdminBookings raw propertyList:", propertyList);
-      console.log("[FRONTEND LOG] AdminBookings raw bookingList:", bookingList);
-
       const propertyMap = new Map(
         propertyList.map((property) => [
           Number(getPropertyId(property)),

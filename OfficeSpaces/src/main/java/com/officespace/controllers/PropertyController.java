@@ -1,6 +1,7 @@
 package com.officespace.controllers;
 
 import java.util.List;
+import java.time.LocalDate;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -36,8 +37,10 @@ public class PropertyController {
 	}
 
 	@GetMapping("/{id}/availability")
-	public ApiResponse<PropertyAvailabilityDTO> getPropertyAvailability(@PathVariable int id) {
-		PropertyAvailabilityDTO dto = availabilityService.getPropertyAvailability(id);
+	public ApiResponse<PropertyAvailabilityDTO> getPropertyAvailability(
+			@PathVariable int id,
+			@org.springframework.web.bind.annotation.RequestParam(required = false) LocalDate date) {
+		PropertyAvailabilityDTO dto = availabilityService.getPropertyAvailability(id, date);
 		return ApiResponse.success("Property availability loaded successfully", dto);
 	}
 

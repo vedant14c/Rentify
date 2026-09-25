@@ -7,4 +7,6 @@ import com.officespace.entities.Payment;
 public interface PaymentDao extends JpaRepository<Payment, Integer> {
 
     Payment findByRazorpayOrderId(String razorpayOrderId);
+
+    Payment findFirstByRequestIdOrderByPaymentIdDesc(Integer requestId);
 }

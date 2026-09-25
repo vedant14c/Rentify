@@ -4,12 +4,9 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -73,7 +70,7 @@ public class Property {
 
 	@jakarta.persistence.Convert(converter = com.officespace.converters.BookingModeConverter.class)
 	@Column(name = "booking_mode")
-	private BookingMode bookingMode = BookingMode.INSTANT;
+	private BookingMode bookingMode;
 
 	@Column(name = "opening_time")
 	private String openingTime;
@@ -84,14 +81,18 @@ public class Property {
 	@Column(name = "slot_duration_minutes")
 	private Integer slotDurationMinutes;
 
+	private Integer capacity;
+
+	private Integer bedrooms;
+
+	private Integer bathrooms;
+
+	private String furnishing;
+
+	private String parking;
+
 	private LocalDateTime createdAt;
 
 	private LocalDateTime updatedAt;
 
-	@PrePersist
-	void applyDefaults() {
-		if (bookingMode == null) {
-			bookingMode = BookingMode.INSTANT;
-		}
-	}
 }

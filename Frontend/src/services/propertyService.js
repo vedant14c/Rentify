@@ -76,11 +76,8 @@ export const normalizeProperty = async (
     firstImageRecord?.imagePath ??
     firstImageRecord?.url;
 
-  const area = Number(
-    property.areaSqft ??
-    property.area ??
-    0
-  );
+  const rawArea = property.areaSqft ?? property.area;
+  const area = rawArea == null || rawArea === "" ? null : Number(rawArea);
 
   const normalizedImages = images.map(
     (image) => ({
@@ -114,12 +111,14 @@ export const normalizeProperty = async (
 
     area,
 
-    capacity:
-      property.capacity ??
-      Math.max(
-        1,
-        Math.round(area / 100)
-      ),
+    capacity: property.capacity ?? null,
+
+    bedrooms: property.bedrooms ?? null,
+    bathrooms: property.bathrooms ?? null,
+    furnishing: property.furnishing ?? null,
+    parking: property.parking ?? null,
+
+    priceUnit: property.priceUnit ?? null,
 
     city:
       property.city ??
@@ -143,26 +142,14 @@ export const normalizeProperty = async (
   };
 };
 
-export const normalizeProperties = async (
-  properties
-) => {
-  console.log("[FRONTEND LOG] propertyService.normalizeProperties raw input:", properties);
-  const propertyList =
-    Array.isArray(properties)
-      ? properties
-      : [];
+export const normalizeProperties = async (properties) => {
+  const propertyList = Array.isArray(properties) ? properties : [];
 
-  const normalizedProperties =
-    await Promise.all(
-      propertyList.map(
-        (property) =>
-          normalizeProperty(property)
-      )
-    );
+  const normalizedProperties = await Promise.all(
+    propertyList.map((property) => normalizeProperty(property))
+  );
 
-  const result = normalizedProperties.filter(Boolean);
-  console.log("[FRONTEND LOG] propertyService.normalizeProperties output:", result);
-  return result;
+  return normalizedProperties.filter(Boolean);
 };
 
 /* Public properties */
@@ -277,14 +264,9 @@ export const uploadPropertyImages = async (
 };
 
 export const smartSearch = async (query) => {
-  console.log("SMART SEARCH CALLED");
-  console.log("Query =", query);
-
   const response = await API.post("/search/smart", {
     query,
   });
-
-  console.log("Backend Response =", response.data);
 
   return normalizeProperties(response.data);
 };

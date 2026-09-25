@@ -1,4 +1,4 @@
-  import {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -21,15 +21,12 @@ import {
   getAllPropertiesForAdmin,
   rejectProperty,
 } from "../services/adminService";
-import {
-  getFullImageUrl,
-  getPropertyImages,
-} from "../services/propertyService";
 import "../css/adminDashboard.css";
 const fallbackImage =
   "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1000&q=85";
 
 function getPropertyId(property) {
+  if (!property) return null;
   return property.propertyId ?? property.id;
 }
 
@@ -93,55 +90,12 @@ function AdminDashboard() {
         if (showLoader) {
           setLoading(true);
         }
-
         setError("");
 
-        const propertyResponse =
-          await getAllPropertiesForAdmin();
-
-        const propertyList = Array.isArray(propertyResponse)
-          ? propertyResponse
-          : [];
-
-        const propertiesWithImages = await Promise.all(
-          propertyList.map(async (property) => {
-            const propertyId = getPropertyId(property);
-
-            try {
-              const imageResponse =
-                await getPropertyImages(propertyId);
-
-              const images = Array.isArray(imageResponse)
-                ? imageResponse
-                : [];
-
-              const firstImage =
-                images[0]?.imageUrl ||
-                images[0]?.url ||
-                property.image ||
-                property.imageUrl ||
-                fallbackImage;
-
-              return {
-                ...property,
-                image: getFullImageUrl(firstImage),
-              };
-            } catch {
-              return {
-                ...property,
-                image: fallbackImage,
-              };
-            }
-          })
-        );
-
-        setProperties(propertiesWithImages);
+        const propertyResponse = await getAllPropertiesForAdmin();
+        setProperties(Array.isArray(propertyResponse) ? propertyResponse : []);
       } catch (requestError) {
-        console.error(
-          "Admin property loading error:",
-          requestError
-        );
-
+        console.error("Admin property loading error:", requestError);
         setError(getErrorMessage(requestError));
       } finally {
         setLoading(false);
@@ -156,18 +110,15 @@ function AdminDashboard() {
 
   const statistics = useMemo(() => {
     const approved = properties.filter(
-      (property) =>
-        getApprovalStatus(property) === "Approved"
+      (property) => getApprovalStatus(property) === "Approved"
     ).length;
 
     const pending = properties.filter(
-      (property) =>
-        getApprovalStatus(property) === "Pending"
+      (property) => getApprovalStatus(property) === "Pending"
     ).length;
 
     const rejected = properties.filter(
-      (property) =>
-        getApprovalStatus(property) === "Rejected"
+      (property) => getApprovalStatus(property) === "Rejected"
     ).length;
 
     return {
@@ -181,17 +132,12 @@ function AdminDashboard() {
   const filteredProperties = useMemo(() => {
     const searchText = search.trim().toLowerCase();
 
-    console.log("[FRONTEND LOG] AdminDashboard filtering. Total raw properties:", properties.length, "statusFilter:", statusFilter, "typeFilter:", typeFilter, "search:", search);
-    properties.forEach((p) => {
-      console.log(`[FRONTEND LOG] Raw Property #${p.propertyId ?? p.id}: title="${p.title}", propertyType="${p.propertyType}", type="${p.type}", approvalStatus="${p.approvalStatus}", isApproved=${p.isApproved}, calculatedStatus="${getApprovalStatus(p)}"`);
-    });
-
-    const result = properties.filter((property) => {
+    return properties.filter((property) => {
+      if (!property) return false;
       const approvalStatus = getApprovalStatus(property);
 
       const matchesStatus =
-        statusFilter === "All" ||
-        approvalStatus === statusFilter;
+        statusFilter === "All" || approvalStatus === statusFilter;
 
       const propType = String(
         property.propertyType || property.type || ""
@@ -203,34 +149,18 @@ function AdminDashboard() {
 
       const matchesSearch =
         !searchText ||
-        property.title
-          ?.toLowerCase()
-          .includes(searchText) ||
-        property.city
-          ?.toLowerCase()
-          .includes(searchText) ||
+        property.title?.toLowerCase().includes(searchText) ||
+        property.city?.toLowerCase().includes(searchText) ||
         propType.toLowerCase().includes(searchText) ||
         String(property.ownerId || "").includes(searchText);
 
-      const keep = matchesStatus && matchesType && matchesSearch;
-      if (!keep) {
-        console.log(`[FRONTEND LOG] Property #${property.propertyId ?? property.id} EXCLUDED. matchesStatus=${matchesStatus}, matchesType=${matchesType}, matchesSearch=${matchesSearch}`);
-      }
-      return keep;
+      return matchesStatus && matchesType && matchesSearch;
     });
-
-    console.log("[FRONTEND LOG] AdminDashboard filteredProperties output count:", result.length);
-    return result;
   }, [properties, search, statusFilter, typeFilter]);
 
-  const handleApprove = async (property) => {
+  const executePropertyAction = async (property, confirmText, actionFn, successText, isDelete = false) => {
     const propertyId = getPropertyId(property);
-
-    const confirmed = window.confirm(
-      `Approve "${property.title}"?`
-    );
-
-    if (!confirmed) {
+    if (!window.confirm(confirmText)) {
       return;
     }
 
@@ -239,97 +169,51 @@ function AdminDashboard() {
       setError("");
       setSuccessMessage("");
 
-      await approveProperty(propertyId);
-      await loadProperties(false);
+      await actionFn(propertyId);
 
-      setSuccessMessage(
-        `${property.title} was approved successfully.`
-      );
+      if (isDelete) {
+        setProperties((previousProperties) =>
+          previousProperties.filter(
+            (item) => getPropertyId(item) !== propertyId
+          )
+        );
+      } else {
+        await loadProperties(false);
+      }
+
+      setSuccessMessage(successText);
     } catch (requestError) {
-      console.error(
-        "Property approval error:",
-        requestError
-      );
-
+      console.error("Property action error:", requestError);
       setError(getErrorMessage(requestError));
     } finally {
       setActionId(null);
     }
   };
 
-  const handleReject = async (property) => {
-    const propertyId = getPropertyId(property);
-
-    const confirmed = window.confirm(
-      `Reject "${property.title}"?`
+  const handleApprove = (property) =>
+    executePropertyAction(
+      property,
+      `Approve "${property.title}"?`,
+      approveProperty,
+      `${property.title} was approved successfully.`
     );
 
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setActionId(propertyId);
-      setError("");
-      setSuccessMessage("");
-
-      await rejectProperty(propertyId);
-      await loadProperties(false);
-
-      setSuccessMessage(
-        `${property.title} was rejected.`
-      );
-    } catch (requestError) {
-      console.error(
-        "Property rejection error:",
-        requestError
-      );
-
-      setError(getErrorMessage(requestError));
-    } finally {
-      setActionId(null);
-    }
-  };
-
-  const handleDelete = async (property) => {
-    const propertyId = getPropertyId(property);
-
-    const confirmed = window.confirm(
-      `Permanently delete "${property.title}"? This action cannot be undone.`
+  const handleReject = (property) =>
+    executePropertyAction(
+      property,
+      `Reject "${property.title}"?`,
+      rejectProperty,
+      `${property.title} was rejected.`
     );
 
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setActionId(propertyId);
-      setError("");
-      setSuccessMessage("");
-
-      await deletePropertyAsAdmin(propertyId);
-
-      setProperties((previousProperties) =>
-        previousProperties.filter(
-          (item) =>
-            getPropertyId(item) !== propertyId
-        )
-      );
-
-      setSuccessMessage(
-        `${property.title} was deleted successfully.`
-      );
-    } catch (requestError) {
-      console.error(
-        "Admin property deletion error:",
-        requestError
-      );
-
-      setError(getErrorMessage(requestError));
-    } finally {
-      setActionId(null);
-    }
-  };
+  const handleDelete = (property) =>
+    executePropertyAction(
+      property,
+      `Permanently delete "${property.title}"? This action cannot be undone.`,
+      deletePropertyAsAdmin,
+      `${property.title} was deleted successfully.`,
+      true
+    );
 
   return (
     <main className="admin-dashboard-page">
@@ -590,7 +474,9 @@ function AdminDashboard() {
 
                       <div className="admin-property-price">
                         <span>
-                          {propType === "Office"
+                          {property.listingType === "SALE" || property.listingType === "BUY"
+                            ? "Asking Price"
+                            : propType === "Office"
                             ? "Rent Amount"
                             : "Monthly Rent"}
                         </span>
@@ -601,12 +487,14 @@ function AdminDashboard() {
                             property.price || 0
                           ).toLocaleString("en-IN")}
 
-                          <small>
-                            /
-                            {String(
-                              property.priceUnit || "MONTH"
-                            ).toLowerCase()}
-                          </small>
+                          {property.listingType !== "SALE" && property.listingType !== "BUY" && (
+                            <small>
+                              /
+                              {String(
+                                property.priceUnit || "MONTH"
+                              ).toLowerCase()}
+                            </small>
+                          )}
                         </strong>
                       </div>
 

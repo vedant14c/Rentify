@@ -29,11 +29,11 @@ function Footer() {
             </Link>
 
             <p>
-              Discover verified rental properties including offices, houses, apartments, and villas.
+              Discover verified properties to rent or buy including offices, houses, apartments, and villas.
             </p>
 
-            <Link to="/offices" className="footer-explore">
-              Explore Rentals
+            <Link to="/properties" className="footer-explore">
+              Explore Properties
               <FiArrowUpRight />
             </Link>
           </div>
@@ -42,9 +42,10 @@ function Footer() {
             <h3>Explore</h3>
 
             <Link to="/">Home</Link>
-            <Link to="/offices">Browse Rentals</Link>
-            <Link to="/my-bookings">My Applications</Link>
-            <Link to="/profile">Profile</Link>
+            <Link to="/properties?intent=RENT">Rent Property</Link>
+            <Link to="/properties?intent=BUY">Buy Property</Link>
+            <Link to="/properties">All Listings</Link>
+            <Link to="/my-bookings">My Inquiries & Bookings</Link>
           </div>
 
           <div className="footer-links">

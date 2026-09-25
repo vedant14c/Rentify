@@ -3,6 +3,7 @@ package com.officespace.dtos;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public class OwnerRequestView {
     private Integer requestId;
@@ -17,6 +18,9 @@ public class OwnerRequestView {
     private String status;
     private LocalDateTime createdAt;
     private String bookingMode;
+    private LocalTime startTime;
+    private LocalTime endTime;
+    private Integer teamSize;
 
     public OwnerRequestView(Integer requestId, Integer propertyId, String propertyTitle,
             Integer userId, String requesterName, String requestType, BigDecimal offerPrice,
@@ -29,6 +33,14 @@ public class OwnerRequestView {
             Integer userId, String requesterName, String requestType, BigDecimal offerPrice,
             LocalDate proposedStart, LocalDate proposedEnd, String status, LocalDateTime createdAt,
             String bookingMode) {
+        this(requestId, propertyId, propertyTitle, userId, requesterName, requestType, offerPrice,
+             proposedStart, proposedEnd, status, createdAt, bookingMode, null, null, null);
+    }
+
+    public OwnerRequestView(Integer requestId, Integer propertyId, String propertyTitle,
+            Integer userId, String requesterName, String requestType, BigDecimal offerPrice,
+            LocalDate proposedStart, LocalDate proposedEnd, String status, LocalDateTime createdAt,
+            String bookingMode, LocalTime startTime, LocalTime endTime, Integer teamSize) {
         this.requestId = requestId;
         this.propertyId = propertyId;
         this.propertyTitle = propertyTitle;
@@ -41,6 +53,9 @@ public class OwnerRequestView {
         this.status = status;
         this.createdAt = createdAt;
         this.bookingMode = bookingMode != null ? bookingMode : "INSTANT";
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.teamSize = teamSize;
     }
 
     // getters (required for Jackson serialization — no Lombok here since this is a JPQL constructor-expression target)
@@ -56,4 +71,7 @@ public class OwnerRequestView {
     public String getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public String getBookingMode() { return bookingMode; }
+    public LocalTime getStartTime() { return startTime; }
+    public LocalTime getEndTime() { return endTime; }
+    public Integer getTeamSize() { return teamSize; }
 }

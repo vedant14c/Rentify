@@ -7,8 +7,7 @@ export function AvailabilityCard({ availability, property }) {
   if (!property) return null;
 
   const typeNormalized = (property.propertyType || property.type || "").trim().toLowerCase();
-  const isOffice = typeNormalized === "office";
-  const isHourly = isOffice && (property.priceUnit || "").toUpperCase() === "HOUR";
+  const isHourly = (property.priceUnit || "").toUpperCase() === "HOUR";
   const isAvailableToday = !availability?.nextAvailableDate || availability.nextAvailableDate === new Date().toISOString().split("T")[0];
 
   return (
@@ -37,7 +36,11 @@ export function AvailabilityCard({ availability, property }) {
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem", fontSize: "0.95rem", fontWeight: "700", color: isAvailableToday ? "#065f46" : "#b45309" }}>
             <FiCheckCircle />
-            {isAvailableToday ? "✔ Available Today" : `Booked - Available from ${formatDateDisplay(availability?.nextAvailableDate)}`}
+            {isHourly
+              ? "Select a date to view hourly slots"
+              : isAvailableToday
+              ? "✔ Available Today"
+              : `Booked - Available from ${formatDateDisplay(availability?.nextAvailableDate)}`}
           </div>
         </div>
 

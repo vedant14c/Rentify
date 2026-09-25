@@ -82,6 +82,8 @@ function AdminUsers() {
     useState(null);
 
   const [selectedUser, setSelectedUser] = useState(null);
+  const [roleEditorUser, setRoleEditorUser] = useState(null);
+  const [roleDraft, setRoleDraft] = useState("USER");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] =
     useState("");
@@ -255,7 +257,13 @@ function AdminUsers() {
     const userId = getUserId(user);
     const currentRole = getUserRole(user);
 
+    if (!newRole || !["USER", "OWNER"].includes(newRole)) {
+      setError("Select a valid role before saving.");
+      return;
+    }
+
     if (newRole === currentRole) {
+      setRoleEditorUser(null);
       return;
     }
 
@@ -270,7 +278,7 @@ function AdminUsers() {
     }
 
     const confirmed = window.confirm(
-      `Change ${user.name}'s role from ${currentRole} to ${newRole}?`
+      `Change ${user.name || "this user"}'s role from ${currentRole} to ${newRole}?`
     );
 
     if (!confirmed) {
@@ -300,8 +308,11 @@ function AdminUsers() {
       );
 
       setSuccessMessage(
-        `${user.name}'s role was changed to ${newRole}.`
+        `${user.name || "This user"}'s role was changed to ${newRole}.`
       );
+
+      setRoleEditorUser(null);
+      setRoleDraft(newRole);
     } catch (requestError) {
       console.error(
         "User role update error:",
@@ -562,25 +573,24 @@ function AdminUsers() {
                         </td>
 
                         <td>
-                            <select
-                              className={`admin-role-select ${role.toLowerCase()}`}
-                              value={role}
-                              onChange={(event) =>
-                                handleRoleChange(
-                                  user,
-                                  event.target.value
-                                )
-                              }
-                              disabled={updatingRole}
-                            >
-                              <option value="USER">
-                                USER
-                              </option>
-
-                              <option value="OWNER">
-                                OWNER
-                              </option>
-                            </select>
+                          <div className="admin-role-cell">
+                            <span className={`admin-user-role ${role.toLowerCase()}`}>
+                              {role}
+                            </span>
+                            {!isCurrentAccount && (
+                              <button
+                                type="button"
+                                className="admin-role-edit-button"
+                                onClick={() => {
+                                  setRoleEditorUser(user);
+                                  setRoleDraft(getUserRole(user));
+                                }}
+                                disabled={updatingRole}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
                         </td>
 
                         <td>
@@ -672,6 +682,100 @@ function AdminUsers() {
           onRoleChange={handleRoleChange}
           currentUserId={currentUserId}
         />
+      )}
+
+      {roleEditorUser && (
+        <div className="role-editor-overlay" onClick={() => setRoleEditorUser(null)}>
+          <div
+            className="role-editor-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-editor-title"
+          >
+            <div className="role-editor-header">
+              <div>
+                <p className="role-editor-kicker">Admin action</p>
+                <h3 id="role-editor-title">Update user role</h3>
+              </div>
+
+              <button
+                type="button"
+                className="role-editor-close"
+                onClick={() => setRoleEditorUser(null)}
+                aria-label="Close role editor"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="role-editor-body">
+              <div className="role-editor-user-summary">
+                <span className="role-editor-avatar">
+                  {getInitials(roleEditorUser.name)}
+                </span>
+
+                <div>
+                  <strong>{roleEditorUser.name || "Unnamed user"}</strong>
+                  <small>{roleEditorUser.email || "Email unavailable"}</small>
+                </div>
+              </div>
+
+              <label className="role-editor-field" htmlFor="role-select">
+                Select a role
+              </label>
+
+              <select
+                id="role-select"
+                className={`admin-role-select ${roleDraft.toLowerCase()}`}
+                value={roleDraft}
+                onChange={(event) => setRoleDraft(event.target.value)}
+                disabled={roleActionId === getUserId(roleEditorUser)}
+              >
+                <option value="USER">USER</option>
+                <option value="OWNER">OWNER</option>
+              </select>
+
+              <p className="role-editor-hint">
+                This action is logged and requires admin confirmation before saving.
+              </p>
+            </div>
+
+            <div className="role-editor-actions">
+              <button
+                type="button"
+                className="role-editor-secondary"
+                onClick={() => setRoleEditorUser(null)}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="role-editor-primary"
+                onClick={() => {
+                  const targetUser = roleEditorUser;
+                  const selectedRole = roleDraft;
+
+                  if (getUserId(targetUser) === currentUserId && selectedRole !== "ADMIN") {
+                    setError("You cannot remove your own ADMIN role.");
+                    return;
+                  }
+
+                  handleRoleChange(targetUser, selectedRole);
+                }}
+                disabled={
+                  roleActionId === getUserId(roleEditorUser) ||
+                  !roleDraft
+                }
+              >
+                {roleActionId === getUserId(roleEditorUser)
+                  ? "Saving..."
+                  : "Save role"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

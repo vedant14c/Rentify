@@ -13,6 +13,7 @@ import "../css/home.css";
 
 function Home() {
   const navigate = useNavigate();
+  const [intent, setIntent] = useState("RENT");
   const [location, setLocation] = useState("");
   const [propertyType, setPropertyType] = useState("");
 
@@ -20,6 +21,10 @@ function Home() {
     event.preventDefault();
 
     const searchParameters = new URLSearchParams();
+
+    if (intent) {
+      searchParameters.set("intent", intent);
+    }
 
     if (location.trim()) {
       searchParameters.set(
@@ -39,8 +44,8 @@ function Home() {
 
     navigate(
       queryString
-        ? `/offices?${queryString}`
-        : "/offices"
+        ? `/properties?${queryString}`
+        : "/properties"
     );
   };
 
@@ -54,25 +59,25 @@ function Home() {
           <div className="hero-content">
             <div className="hero-badge">
               <FiCheckCircle />
-              Premium property rental platform
+              Verified Property Marketplace
             </div>
 
             <h1>
-              Find your ideal rental property
-              <span> hassle-free.</span>
+              Find your ideal property
+              <span> to rent or buy.</span>
             </h1>
 
             <p className="hero-description">
               Discover verified offices, houses, apartments and villas
-              available for rent in top locations—all in one place.
+              available for rent and sale in top locations—all in one place.
             </p>
 
             <div className="hero-buttons">
               <Link
-                to="/offices"
+                to="/properties"
                 className="primary-btn"
               >
-                Explore Rental Properties
+                Explore Properties
                 <FiArrowRight />
               </Link>
 
@@ -80,14 +85,14 @@ function Home() {
                 to="/list-property"
                 className="hero-secondary-btn"
               >
-                List Your Rental Property
+                List Your Property
               </Link>
             </div>
 
             <div className="hero-trust">
               <div>
                 <strong>500+</strong>
-                <span>Rental properties</span>
+                <span>Verified listings</span>
               </div>
 
               <div>
@@ -97,19 +102,36 @@ function Home() {
 
               <div>
                 <strong>1,000+</strong>
-                <span>Happy tenants</span>
+                <span>Happy buyers & tenants</span>
               </div>
             </div>
           </div>
 
           <div className="search-card">
+            <div className="search-intent-tabs">
+              <button
+                type="button"
+                className={`search-intent-tab ${intent === "RENT" ? "active" : ""}`}
+                onClick={() => setIntent("RENT")}
+              >
+                Rent Property
+              </button>
+              <button
+                type="button"
+                className={`search-intent-tab ${intent === "BUY" ? "active" : ""}`}
+                onClick={() => setIntent("BUY")}
+              >
+                Buy Property
+              </button>
+            </div>
+
             <div className="search-card-heading">
               <span className="search-heading-icon">
                 <FiSearch />
               </span>
 
               <div>
-                <h2>Find your perfect rental</h2>
+                <h2>Find your perfect {intent === "BUY" ? "property to buy" : "rental"}</h2>
 
                 <p>
                   Search by location and property type
@@ -180,7 +202,7 @@ function Home() {
                 className="search-button"
               >
                 <FiSearch />
-                Search Rentals
+                Search {intent === "BUY" ? "Properties to Buy" : "Rental Properties"}
               </button>
             </form>
 
@@ -199,12 +221,12 @@ function Home() {
           </p>
 
           <h2 className="section-heading">
-            Everything you need for property rental
+            Everything you need to rent or buy property
           </h2>
 
           <p className="section-description">
             SpacesHub makes searching, comparing and
-            applying for property rentals simple and secure.
+            securing verified properties simple and seamless.
           </p>
 
           <div className="features-grid">

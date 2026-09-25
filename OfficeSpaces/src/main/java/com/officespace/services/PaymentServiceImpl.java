@@ -19,7 +19,11 @@ import com.officespace.entities.NotificationType;
 import com.officespace.entities.Payment;
 import com.officespace.entities.Property;
 import com.officespace.entities.PropertyRequest;
+import com.officespace.entities.Role;
 import com.officespace.entities.User;
+import com.officespace.security.AuthenticatedUserService;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
 import com.razorpay.Utils;
@@ -43,6 +47,7 @@ public class PaymentServiceImpl {
     private final UserDao userDao;
     private final NotificationDao notificationDao;
     private final NotificationServiceImpl notificationServiceImpl;
+    private final AuthenticatedUserService authenticatedUserService;
     public PaymentServiceImpl(
     		PaymentDao paymentDao,
     	    PropertyRequestDao propertyRequestDao,
@@ -50,7 +55,8 @@ public class PaymentServiceImpl {
     	    BookingValidationService validationService,
     	    UserDao userDao,
     	    NotificationDao notificationDao,
-    	    NotificationServiceImpl notificationServiceImpl
+    	    NotificationServiceImpl notificationServiceImpl,
+    	    AuthenticatedUserService authenticatedUserService
         
         
     ) {
@@ -61,21 +67,26 @@ public class PaymentServiceImpl {
         this.userDao = userDao;
         this.notificationDao = notificationDao;
         this.notificationServiceImpl = notificationServiceImpl;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     public Map<String, Object> createOrder(int requestId, int userId) {
+        User authenticatedUser = authenticatedUserService.requireUser();
+        if (authenticatedUser.getRole() == Role.OWNER) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Property owners cannot create rental payments.");
+        }
         PropertyRequest request = propertyRequestDao.findById(requestId)
             .orElseThrow(() -> new IllegalArgumentException("Booking request not found with ID: " + requestId));
 
-        if (userId > 0 && !request.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("This booking request does not belong to user ID: " + userId);
+        if (!authenticatedUser.getId().equals(request.getUserId())) {
+            throw new IllegalArgumentException("This booking request does not belong to the authenticated user.");
         }
 
         BookingStatus status = request.getStatus();
 
         if (status != BookingStatus.APPROVED
-                && status != BookingStatus.PENDING_PAYMENT
-                && status != BookingStatus.CONFIRMED) {
+                && status != BookingStatus.PENDING_PAYMENT) {
 
             throw new IllegalStateException("Only approved or pending payment bookings can be paid for.");
         }
@@ -86,12 +97,26 @@ public class PaymentServiceImpl {
             throw new IllegalStateException("Payment hold period has expired. Please create a new booking request.");
         }
 
+        Payment existingPayment = paymentDao.findFirstByRequestIdOrderByPaymentIdDesc(requestId);
+        if (existingPayment != null && "PAID".equalsIgnoreCase(existingPayment.getStatus())) {
+            throw new IllegalStateException("This booking has already been paid and confirmed.");
+        }
+
         Property property = propertyDao.findById(request.getPropertyId())
             .orElseThrow(() -> new IllegalArgumentException("Property not found with ID: " + request.getPropertyId()));
 
-        double amount = request.getOfferPrice() != null
-            ? request.getOfferPrice().doubleValue()
-            : property.getPrice();
+        double amount;
+        if ("HOUR".equalsIgnoreCase(property.getPriceUnit())) {
+            if (request.getStartTime() == null || request.getEndTime() == null) {
+                throw new IllegalArgumentException("Structured hourly booking times are required.");
+            }
+            validationService.validateHourlyBooking(request, property);
+            amount = property.getPrice() * Duration.between(request.getStartTime(), request.getEndTime()).toMinutes() / 60.0;
+        } else {
+            amount = request.getOfferPrice() != null
+                ? request.getOfferPrice().doubleValue()
+                : calculateDateRangeAmount(request, property);
+        }
 
         try {
             RazorpayClient client = new RazorpayClient(keyId, keySecret);
@@ -122,6 +147,34 @@ public class PaymentServiceImpl {
         }
     }
 
+    private double calculateDateRangeAmount(PropertyRequest request, Property property) {
+        if (request.getProposedStart() == null || request.getProposedEnd() == null) {
+            throw new IllegalArgumentException("Booking dates are required.");
+        }
+
+        long days = ChronoUnit.DAYS.between(request.getProposedStart(), request.getProposedEnd());
+        if (days <= 0) {
+            throw new IllegalArgumentException("Booking checkout date must be after check-in date.");
+        }
+
+        String unit = property.getPriceUnit() == null ? "MONTH" : property.getPriceUnit().toUpperCase();
+        long multiplier;
+        switch (unit) {
+            case "DAY":
+            case "NIGHT":
+                multiplier = days;
+                break;
+            case "WEEK":
+                multiplier = Math.max(1, (days + 6) / 7);
+                break;
+            case "MONTH":
+            default:
+                multiplier = Math.max(1, (days + 29) / 30);
+                break;
+        }
+        return property.getPrice() * multiplier;
+    }
+
     public Payment verifyPayment(VerifyPaymentRequest verifyRequest) {
         Payment payment = paymentDao.findByRazorpayOrderId(verifyRequest.getRazorpayOrderId());
 
@@ -130,6 +183,15 @@ public class PaymentServiceImpl {
         }
 
         try {
+            PropertyRequest request = propertyRequestDao.findById(payment.getRequestId())
+                .orElseThrow(() -> new IllegalArgumentException("Booking request not found with ID: " + payment.getRequestId()));
+
+            if ("PAID".equalsIgnoreCase(payment.getStatus())
+                    || request.getStatus() == BookingStatus.CONFIRMED
+                    || request.getStatus() == BookingStatus.confirmed) {
+                return payment;
+            }
+
             JSONObject options = new JSONObject();
             options.put("razorpay_order_id", verifyRequest.getRazorpayOrderId());
             options.put("razorpay_payment_id", verifyRequest.getRazorpayPaymentId());
@@ -143,13 +205,28 @@ public class PaymentServiceImpl {
                 throw new IllegalStateException("Payment signature verification failed.");
             }
 
-            PropertyRequest request = propertyRequestDao.findById(payment.getRequestId())
-                .orElseThrow(() -> new IllegalArgumentException("Booking request not found with ID: " + payment.getRequestId()));
-
             // Acquire row-level lock on property and re-verify availability before confirming
-            propertyDao.findWithLockByPropertyId(request.getPropertyId());
+            Property property = propertyDao.findWithLockByPropertyId(request.getPropertyId())
+                    .orElseThrow(() -> new IllegalArgumentException("Property not found with ID: " + request.getPropertyId()));
 
-            if (validationService.hasOverlapExcludingRequest(request.getPropertyId(), request.getRequestId(), request.getProposedStart(), request.getProposedEnd())) {
+            boolean overlap;
+            if ("HOUR".equalsIgnoreCase(property.getPriceUnit())) {
+                validationService.validateHourlyBooking(request, property);
+                overlap = validationService.hasHourlyOverlapExcludingRequest(
+                        request.getPropertyId(),
+                        request.getRequestId(),
+                        request.getProposedStart(),
+                        request.getStartTime(),
+                        request.getEndTime());
+            } else {
+                overlap = validationService.hasOverlapExcludingRequest(
+                        request.getPropertyId(),
+                        request.getRequestId(),
+                        request.getProposedStart(),
+                        request.getProposedEnd());
+            }
+
+            if (overlap) {
                 payment.setStatus("FAILED");
                 paymentDao.save(payment);
                 request.setStatus(BookingStatus.EXPIRED);
@@ -165,7 +242,6 @@ public class PaymentServiceImpl {
             request.setStatus(BookingStatus.CONFIRMED);
             propertyRequestDao.save(request);
 
-            Property property = propertyDao.findById(request.getPropertyId()).orElse(null);
             if (property != null) {
                 User owner = userDao.findById(property.getOwnerId()).orElse(null);
                 if (owner != null) {

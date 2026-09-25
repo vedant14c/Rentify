@@ -111,6 +111,7 @@ public class SmartSearchServiceImpl {
             JSONObject filtersJson = new JSONObject(text);
 
             SmartSearchRequest filters = new SmartSearchRequest();
+            filters.setQuery(query);
             filters.setCity(filtersJson.optString("city", null));
             filters.setPropertyType(filtersJson.optString("propertyType", null));
             
@@ -178,18 +179,41 @@ public class SmartSearchServiceImpl {
         	            p.getPrice()))
 
         	    .filter(p -> {
+                    boolean hasStructuredFilters = filters.getCity() != null
+                            || filters.getPropertyType() != null
+                            || filters.getListingType() != null
+                            || filters.getMaxPrice() != null
+                            || filters.getMinPrice() != null
+                            || filters.getMinArea() != null;
+                    String searchableText = String.join(" ",
+                            p.getTitle() == null ? "" : p.getTitle(),
+                            p.getDescription() == null ? "" : p.getDescription(),
+                            p.getPropertyType() == null ? "" : p.getPropertyType(),
+                            p.getAddress() == null ? "" : p.getAddress(),
+                            p.getCity() == null ? "" : p.getCity(),
+                            p.getState() == null ? "" : p.getState()).toLowerCase();
+                    boolean textMatch = !hasStructuredFilters || filters.getQuery() == null
+                            || filters.getQuery().isBlank()
+                            || java.util.Arrays.stream(filters.getQuery().toLowerCase().split("\\s+"))
+                                .filter(token -> token.length() > 2)
+                                .allMatch(searchableText::contains);
         	        boolean match =
         	                (filters.getCity() == null ||
-        	                        p.getCity().equalsIgnoreCase(filters.getCity()))
+        	                        (p.getCity() != null && p.getCity().equalsIgnoreCase(filters.getCity())))
         	                &&
         	                (filters.getPropertyType() == null ||
-        	                        p.getPropertyType().equalsIgnoreCase(filters.getPropertyType()))
+        	                        (p.getPropertyType() != null && p.getPropertyType().equalsIgnoreCase(filters.getPropertyType())))
         	                &&
         	                (filters.getListingType() == null ||
-        	                        p.getListingType().equalsIgnoreCase(filters.getListingType()))
+        	                        (p.getListingType() != null && p.getListingType().equalsIgnoreCase(filters.getListingType())))
         	                &&
         	                (filters.getMaxPrice() == null ||
-        	                        p.getPrice() <= filters.getMaxPrice());
+        	                        (p.getPrice() != null && p.getPrice() <= filters.getMaxPrice()))
+                            &&
+                            (filters.getMinArea() == null ||
+                                    (p.getAreaSqft() != null && p.getAreaSqft() >= filters.getMinArea()))
+                            &&
+                            (!hasStructuredFilters || textMatch);
 
         	        System.out.println("MATCH = " + match);
 

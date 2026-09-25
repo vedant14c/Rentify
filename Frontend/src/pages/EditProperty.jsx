@@ -21,9 +21,9 @@ import "../css/propertyForm.css";
 const emptyForm = {
   title: "",
   description: "",
-  propertyType: "Office",
+  propertyType: "",
   listingType: "RENT",
-  bookingMode: "INSTANT",
+  bookingMode: "",
   price: "",
   priceUnit: "MONTH",
   openingTime: "09:00",
@@ -31,10 +31,10 @@ const emptyForm = {
   slotDurationMinutes: "60",
   areaSqft: "",
   capacity: "",
-  bedrooms: "1",
-  bathrooms: "1",
-  furnishing: "Unfurnished",
-  parking: "No",
+  bedrooms: "",
+  bathrooms: "",
+  furnishing: "",
+  parking: "",
   floorNumber: "",
   totalFloors: "",
   address: "",
@@ -59,10 +59,10 @@ function getResidentialDetailsFromDescription(description = "") {
   const parkingMatch = description.match(/Parking:\s*(Yes|No)/i);
 
   return {
-    bedrooms: bedroomsMatch ? bedroomsMatch[1] : "1",
-    bathrooms: bathroomsMatch ? bathroomsMatch[1] : "1",
-    furnishing: furnishingMatch ? furnishingMatch[1] : "Unfurnished",
-    parking: parkingMatch ? parkingMatch[1] : "No",
+    bedrooms: bedroomsMatch ? bedroomsMatch[1] : "",
+    bathrooms: bathroomsMatch ? bathroomsMatch[1] : "",
+    furnishing: furnishingMatch ? furnishingMatch[1] : "",
+    parking: parkingMatch ? parkingMatch[1] : "",
   };
 }
 
@@ -121,25 +121,23 @@ function EditProperty() {
         const resDetails = getResidentialDetailsFromDescription(property.description);
 
         const loadedPropertyType = property.propertyType || property.type || "Office";
-        const isOffice = loadedPropertyType === "Office";
-
         setFormData({
           title: property.title || property.name || "",
           description: removeMetadataFromDescription(property.description || ""),
           propertyType: loadedPropertyType,
           listingType: property.listingType || "RENT",
-          bookingMode: property.bookingMode || "INSTANT",
+          bookingMode: property.bookingMode || "",
           price: property.price ?? "",
-          priceUnit: isOffice ? property.priceUnit || "MONTH" : "MONTH",
+          priceUnit: property.priceUnit || "",
           openingTime: property.openingTime || "09:00",
           closingTime: property.closingTime || "18:00",
           slotDurationMinutes: String(property.slotDurationMinutes || 60),
           areaSqft: property.areaSqft ?? property.area ?? "",
           capacity: descriptionCapacity || property.capacity || "",
-          bedrooms: resDetails.bedrooms,
-          bathrooms: resDetails.bathrooms,
-          furnishing: resDetails.furnishing,
-          parking: resDetails.parking,
+          bedrooms: property.bedrooms ?? resDetails.bedrooms,
+          bathrooms: property.bathrooms ?? resDetails.bathrooms,
+          furnishing: property.furnishing ?? resDetails.furnishing,
+          parking: property.parking ?? resDetails.parking,
           floorNumber: property.floorNumber ?? "",
           totalFloors: property.totalFloors ?? "",
           address: property.address || "",
@@ -177,8 +175,8 @@ function EditProperty() {
         [name]: value,
       };
 
-      if (name === "propertyType" && value !== "Office") {
-        updatedData.priceUnit = "MONTH";
+      if (name === "propertyType" && ["House", "Apartment", "Villa"].includes(value)) {
+        updatedData.bookingMode = "REQUEST";
       }
 
       return updatedData;
@@ -246,33 +244,27 @@ function EditProperty() {
 
     const isOfficeType = formData.propertyType === "Office";
 
-    let extraDetails = "";
-
-    if (isOfficeType) {
-      if (formData.capacity) {
-        extraDetails = `Capacity: ${Number(formData.capacity)} people`;
-      }
-    } else {
-      extraDetails = `Bedrooms: ${formData.bedrooms || 1}\nBathrooms: ${formData.bathrooms || 1}\nFurnishing: ${formData.furnishing || "Unfurnished"}\nParking: ${formData.parking || "No"}`;
-    }
-
     const cleanDescription = formData.description.trim();
-    const descriptionWithDetails = extraDetails ? `${cleanDescription}\n\n${extraDetails}` : cleanDescription;
 
     const isHourlyOffice = isOfficeType && formData.priceUnit === "HOUR";
 
     const propertyData = {
       ownerId: Number(existingProperty.ownerId),
       title: formData.title.trim(),
-      description: descriptionWithDetails,
+      description: cleanDescription,
       propertyType: formData.propertyType,
       listingType: formData.listingType,
-      bookingMode: formData.bookingMode || "INSTANT",
+      bookingMode: formData.bookingMode || existingProperty.bookingMode || "INSTANT",
       price: Number(formData.price),
-      priceUnit: isOfficeType ? formData.priceUnit : "MONTH",
+      priceUnit: formData.priceUnit || existingProperty.priceUnit || null,
       openingTime: isHourlyOffice ? formData.openingTime || "09:00" : null,
       closingTime: isHourlyOffice ? formData.closingTime || "18:00" : null,
       slotDurationMinutes: isHourlyOffice ? Number(formData.slotDurationMinutes || 60) : null,
+      capacity: isOfficeType && formData.capacity ? Number(formData.capacity) : null,
+      bedrooms: !isOfficeType && formData.bedrooms ? Number(formData.bedrooms) : null,
+      bathrooms: !isOfficeType && formData.bathrooms ? Number(formData.bathrooms) : null,
+      furnishing: !isOfficeType && formData.furnishing ? formData.furnishing : null,
+      parking: !isOfficeType && formData.parking ? formData.parking : null,
       areaSqft: Number(formData.areaSqft),
       floorNumber,
       totalFloors,
@@ -374,6 +366,7 @@ function EditProperty() {
   }
 
   const isOfficeType = formData.propertyType === "Office";
+  const isResidentialType = ["House", "Apartment", "Villa"].includes(formData.propertyType);
   const isHourlyOffice = isOfficeType && formData.priceUnit === "HOUR";
 
   return (
@@ -421,6 +414,11 @@ function EditProperty() {
                 <label className="property-field">
                   Property type
                   <select name="propertyType" value={formData.propertyType} onChange={handleChange} required>
+                    <option value="">Select property type</option>
+                    {formData.propertyType &&
+                      !["Office", "House", "Apartment", "Villa"].includes(formData.propertyType) && (
+                        <option value={formData.propertyType}>{formData.propertyType} (existing)</option>
+                      )}
                     <option value="Office">Office</option>
                     <option value="House">House</option>
                     <option value="Apartment">Apartment</option>
@@ -428,11 +426,26 @@ function EditProperty() {
                   </select>
                 </label>
 
+                <label className="property-field">
+                  Listing Type
+                  <select name="listingType" value={formData.listingType} onChange={handleChange} required>
+                    <option value="RENT">For Rent</option>
+                    <option value="SALE">For Sale (Purchase)</option>
+                  </select>
+                </label>
+
                 <label className="property-field property-full-width">
                   Booking Mode
                   <select name="bookingMode" value={formData.bookingMode} onChange={handleChange} required>
-                    <option value="INSTANT">Instant Book (Guests book & pay immediately)</option>
-                    <option value="APPROVAL">Approval Required (Owner reviews & approves each request)</option>
+                    {isOfficeType && (
+                      <option value="INSTANT">Instant Book (Guests book & pay immediately)</option>
+                    )}
+                    <option value="REQUEST">Request to Book (Owner reviews and approves)</option>
+                    {!isResidentialType &&
+                      !["INSTANT", "REQUEST"].includes(formData.bookingMode) &&
+                      formData.bookingMode && (
+                      <option value={formData.bookingMode}>Existing mode ({formData.bookingMode})</option>
+                    )}
                   </select>
                 </label>
 
@@ -515,27 +528,29 @@ function EditProperty() {
                 {isOfficeType ? (
                   <>
                     <label className="property-field">
-                      Rent Amount
+                      {formData.listingType === "SALE" ? "Purchase Price (₹)" : "Price (₹)"}
                       <input
                         type="number"
                         name="price"
                         value={formData.price}
                         onChange={handleChange}
-                        placeholder="Rent amount"
+                        placeholder={formData.listingType === "SALE" ? "Total purchase price" : "Rent amount"}
                         min="1"
                         required
                       />
                     </label>
 
-                    <label className="property-field">
-                      Rental Unit
-                      <select name="priceUnit" value={formData.priceUnit} onChange={handleChange} required>
-                        <option value="HOUR">Per Hour</option>
-                        <option value="DAY">Per Day</option>
-                        <option value="WEEK">Per Week</option>
-                        <option value="MONTH">Per Month</option>
-                      </select>
-                    </label>
+                    {formData.listingType !== "SALE" && (
+                      <label className="property-field">
+                        Rental Unit
+                        <select name="priceUnit" value={formData.priceUnit} onChange={handleChange} required>
+                          <option value="HOUR">Per Hour</option>
+                          <option value="DAY">Per Day</option>
+                          <option value="WEEK">Per Week</option>
+                          <option value="MONTH">Per Month</option>
+                        </select>
+                      </label>
+                    )}
 
                     {/* Business Hours - ONLY for Office + HOUR */}
                     {isHourlyOffice && (
@@ -612,13 +627,13 @@ function EditProperty() {
                 ) : (
                   <>
                     <label className="property-field">
-                      Monthly Rent
+                      {formData.listingType === "SALE" ? "Purchase Price (₹)" : "Monthly Rent (₹)"}
                       <input
                         type="number"
                         name="price"
                         value={formData.price}
                         onChange={handleChange}
-                        placeholder="Monthly rent"
+                        placeholder={formData.listingType === "SALE" ? "Total purchase price" : "Monthly rent"}
                         min="1"
                         required
                       />
@@ -635,6 +650,35 @@ function EditProperty() {
                         min="1"
                         required
                       />
+                    </label>
+
+                    <label className="property-field">
+                      Bedrooms
+                      <input type="number" name="bedrooms" value={formData.bedrooms} onChange={handleChange} min="0" />
+                    </label>
+
+                    <label className="property-field">
+                      Bathrooms
+                      <input type="number" name="bathrooms" value={formData.bathrooms} onChange={handleChange} min="0" />
+                    </label>
+
+                    <label className="property-field">
+                      Furnishing
+                      <select name="furnishing" value={formData.furnishing} onChange={handleChange}>
+                        <option value="">Select furnishing</option>
+                        <option value="Furnished">Furnished</option>
+                        <option value="Semi-Furnished">Semi-Furnished</option>
+                        <option value="Unfurnished">Unfurnished</option>
+                      </select>
+                    </label>
+
+                    <label className="property-field">
+                      Parking
+                      <select name="parking" value={formData.parking} onChange={handleChange}>
+                        <option value="">Select parking</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
                     </label>
                   </>
                 )}
