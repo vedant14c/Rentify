@@ -91,12 +91,18 @@ function MyBookings() {
 
             const teamSize = getMessageValue(request.message, "Team");
             const savedDuration = getMessageValue(request.message, "Duration");
+            const isPurchaseInquiry =
+              String(office?.listingType || "").toUpperCase() === "SALE" ||
+              String(request.requestType || "").toUpperCase() === "PURCHASE" ||
+              String(request.requestType || "").toUpperCase() === "BUY" ||
+              String(request.message || "").toUpperCase().includes("PURCHASE INQUIRY");
 
             return {
               id: request.requestId,
               propertyId: request.propertyId,
               officeName: office?.title || office?.name || `Property #${request.propertyId}`,
               officeType: office?.propertyType || office?.type || "Property",
+              isPurchaseInquiry,
               city: office?.city || "Location unavailable",
               image:
                 office?.image ||
@@ -213,6 +219,12 @@ function MyBookings() {
 
   const filteredBookings = bookings.filter((b) => {
     const status = String(b.rawStatus || "").toUpperCase();
+    if (activeTab === "PURCHASE_INQUIRIES") {
+      return b.isPurchaseInquiry;
+    }
+    if (activeTab === "RENTALS") {
+      return !b.isPurchaseInquiry;
+    }
     if (activeTab === "UPCOMING") {
       return (status === "CONFIRMED" || status === "APPROVED") && b.bookingDate > todayStr;
     }
@@ -235,32 +247,38 @@ function MyBookings() {
     <main className="bookings-page">
       <section className="bookings-header">
         <div className="container">
-          <p>MY APPLICATIONS</p>
-          <h1>My Rental Applications</h1>
-          <span>View and manage all your property rental applications.</span>
+          <p>MY INQUIRIES & APPLICATIONS</p>
+          <h1>My Bookings & Inquiries</h1>
+          <span>View and track your rental applications and property purchase visit requests.</span>
         </div>
       </section>
 
       <section className="container bookings-content">
         {/* Categorized Filter Tabs */}
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.5rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.75rem" }}>
-          {["ALL", "UPCOMING", "CURRENT", "PAST", "CANCELLED", "EXPIRED"].map((tab) => (
+          {[
+            { key: "ALL", label: "All" },
+            { key: "PURCHASE_INQUIRIES", label: "Purchase Inquiries" },
+            { key: "RENTALS", label: "Rentals" },
+            { key: "UPCOMING", label: "Upcoming" },
+            { key: "CANCELLED", label: "Cancelled" },
+          ].map(({ key, label }) => (
             <button
-              key={tab}
+              key={key}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              onClick={() => setActiveTab(key)}
               style={{
                 padding: "0.5rem 1rem",
                 borderRadius: "8px",
                 fontSize: "0.85rem",
                 fontWeight: "600",
                 border: "none",
-                background: activeTab === tab ? "#2563eb" : "#f1f5f9",
-                color: activeTab === tab ? "#ffffff" : "#475569",
+                background: activeTab === key ? "#2563eb" : "#f1f5f9",
+                color: activeTab === key ? "#ffffff" : "#475569",
                 cursor: "pointer",
               }}
             >
-              {tab.charAt(0) + tab.slice(1).toLowerCase()}
+              {label}
             </button>
           ))}
         </div>
@@ -284,9 +302,9 @@ function MyBookings() {
             <span>
               <FiCalendar />
             </span>
-            <h2>No bookings found</h2>
-            <p>Explore our available rental properties and send your rental application.</p>
-            <Link to="/offices" className="primary-btn">
+            <h2>No requests found</h2>
+            <p>Explore our available properties to rent or buy and send an application or visit inquiry.</p>
+            <Link to="/properties" className="primary-btn">
               Explore Properties
             </Link>
           </div>
@@ -294,7 +312,7 @@ function MyBookings() {
           <div className="bookings-list">
             {filteredBookings.map((booking) => {
               const statusUpper = String(booking.rawStatus || "").toUpperCase();
-              const canPay = statusUpper === "PENDING_PAYMENT" || statusUpper === "APPROVED";
+              const canPay = (statusUpper === "PENDING_PAYMENT" || statusUpper === "APPROVED") && !booking.isPurchaseInquiry;
               const cancellable = isCancellable(booking);
 
               return (
@@ -304,7 +322,9 @@ function MyBookings() {
                   <div className="booking-card-content">
                     <div className="booking-card-heading">
                       <div>
-                        <span className="booking-office-type">{booking.officeType}</span>
+                        <span className="booking-office-type" style={booking.isPurchaseInquiry ? { color: "#059669", fontWeight: "700" } : {}}>
+                          {booking.isPurchaseInquiry ? "For Sale • " : ""}{booking.officeType}
+                        </span>
                         <h2>{booking.officeName}</h2>
                         <p>
                           <FiMapPin />
@@ -315,37 +335,63 @@ function MyBookings() {
                       <BookingStatusBadge status={booking.rawStatus} />
                     </div>
 
-                    <div className="booking-card-information">
-                      <div>
-                        <FiCalendar />
-                        <span>
-                          <small>Start Date</small>
-                          <strong>{formatDate(booking.bookingDate)}</strong>
-                        </span>
-                      </div>
+                    {booking.isPurchaseInquiry ? (
+                      <div className="booking-card-information">
+                        <div>
+                          <FiCalendar />
+                          <span>
+                            <small>Preferred Visit Date</small>
+                            <strong>{formatDate(booking.bookingDate)}</strong>
+                          </span>
+                        </div>
 
-                      <div>
-                        <FiClock />
-                        <span>
-                          <small>Duration</small>
-                          <strong>{booking.duration}</strong>
-                        </span>
+                        <div>
+                          <FiClock />
+                          <span>
+                            <small>Inquiry Type</small>
+                            <strong style={{ color: "#059669" }}>Site Visit & Purchase</strong>
+                          </span>
+                        </div>
                       </div>
+                    ) : (
+                      <div className="booking-card-information">
+                        <div>
+                          <FiCalendar />
+                          <span>
+                            <small>Start Date</small>
+                            <strong>{formatDate(booking.bookingDate)}</strong>
+                          </span>
+                        </div>
 
-                      <div>
-                        <FiUsers />
-                        <span>
-                          <small>Occupants</small>
-                          <strong>{booking.teamSize ? `${booking.teamSize} people` : "1 person"}</strong>
-                        </span>
+                        <div>
+                          <FiClock />
+                          <span>
+                            <small>Duration</small>
+                            <strong>{booking.duration}</strong>
+                          </span>
+                        </div>
+
+                        <div>
+                          <FiUsers />
+                          <span>
+                            <small>Occupants</small>
+                            <strong>{booking.teamSize ? `${booking.teamSize} people` : "1 person"}</strong>
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {booking.message && (
+                      <div style={{ marginTop: "8px", padding: "6px 10px", background: "#f8fafc", borderRadius: "6px", fontSize: "12px", color: "#64748b" }}>
+                        <strong>Details:</strong> {booking.message}
+                      </div>
+                    )}
 
                     <div className="booking-card-bottom">
                       <div>
-                        <small>Price Rate</small>
-                        <strong>
-                          ₹{booking.price.toLocaleString("en-IN")}/{String(booking.priceUnit).toLowerCase()}
+                        <small>{booking.isPurchaseInquiry ? "Asking Price" : "Price Rate"}</small>
+                        <strong style={{ color: booking.isPurchaseInquiry ? "#059669" : "#0f172a" }}>
+                          ₹{booking.price.toLocaleString("en-IN")}{!booking.isPurchaseInquiry && `/${String(booking.priceUnit).toLowerCase()}`}
                         </strong>
                       </div>
 

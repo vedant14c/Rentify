@@ -1,12 +1,7 @@
 import API from "./api";
 
 export const createPaymentOrder = async (requestId) => {
-  const userId = Number(localStorage.getItem("userId"));
-
-  const response = await API.post(
-    `/payments/create-order/${requestId}`,
-    { userId }
-  );
+  const response = await API.post(`/payments/create-order/${requestId}`);
 
   return response.data;
 };

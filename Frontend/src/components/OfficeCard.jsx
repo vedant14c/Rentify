@@ -152,7 +152,7 @@ function OfficeCard({ office }) {
     }
 
     navigate(
-      `/office-details/${propertyId}`
+      `/property/${propertyId}`
     );
 
     window.scrollTo({
@@ -160,6 +160,9 @@ function OfficeCard({ office }) {
       behavior: "smooth",
     });
   };
+
+  const rawListingType = String(office.listingType || "RENT").toUpperCase();
+  const isForSale = rawListingType === "SALE" || rawListingType === "BUY";
 
   const rawType = String(office.type || office.propertyType || "Property").trim();
   const lowerType = rawType.toLowerCase();
@@ -172,6 +175,18 @@ function OfficeCard({ office }) {
   else if (lowerType === "villa") primaryType = "Villa";
 
   const badgeText = primaryType;
+  const isOffice = primaryType.toLowerCase() === "office";
+  const availableAttributes = isOffice
+    ? [
+        office.capacity != null && `${office.capacity} people`,
+      ].filter(Boolean)
+    : [
+        office.bedrooms != null && `${office.bedrooms} bedrooms`,
+        office.bathrooms != null && `${office.bathrooms} bathrooms`,
+        office.furnishing,
+        office.parking != null && `Parking: ${office.parking}`,
+      ].filter(Boolean);
+  const priceUnit = String(office.priceUnit || "").trim().toLowerCase();
 
   const formattedPrice = Number(
     office.price || 0
@@ -186,9 +201,14 @@ function OfficeCard({ office }) {
           className="office-image"
         />
 
-        <span className="office-type">
-          {badgeText}
-        </span>
+        <div className="office-badges">
+          <span className={`listing-tag ${isForSale ? "tag-sale" : "tag-rent"}`}>
+            {isForSale ? "For Sale" : "For Rent"}
+          </span>
+          <span className="office-type">
+            {badgeText}
+          </span>
+        </div>
 
         <button
           type="button"
@@ -253,15 +273,19 @@ function OfficeCard({ office }) {
         </div>
 
         <div className="office-information">
-          <span>
-            <FiMaximize2 />
-            {office.area || 0} sq.ft.
-          </span>
+          {office.area != null && (
+            <span>
+              <FiMaximize2 />
+              {office.area} sq.ft.
+            </span>
+          )}
 
-          <span>
-            <FiUsers />
-            {office.capacity || 1} people
-          </span>
+          {availableAttributes.map((attribute) => (
+            <span key={attribute}>
+              {isOffice ? <FiUsers /> : <FiMaximize2 />}
+              {attribute}
+            </span>
+          ))}
         </div>
 
         <div className="office-card-footer">
@@ -270,7 +294,7 @@ function OfficeCard({ office }) {
               ₹{formattedPrice}
             </strong>
 
-            <span>/{String(office.priceUnit || "MONTH").toLowerCase()}</span>
+            {!isForSale && priceUnit && <span>/{priceUnit}</span>}
           </div>
 
           <button

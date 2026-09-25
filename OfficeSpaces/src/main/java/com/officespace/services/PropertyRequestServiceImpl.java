@@ -23,6 +23,8 @@ import com.officespace.entities.PropertyRequest;
 import com.officespace.entities.RequestType;
 import com.officespace.entities.User;
 import com.officespace.utils.BookingDateUtils;
+import com.officespace.security.AuthenticatedUserService;
+import com.officespace.entities.Role;
 
 import jakarta.transaction.Transactional;
 
@@ -36,19 +38,22 @@ public class PropertyRequestServiceImpl {
 	private final NotificationDao notificationDao;
 	private final BookingValidationService validationService;
 	private final NotificationServiceImpl notificationServiceImpl;
+	private final AuthenticatedUserService authenticatedUserService;
 	
 	public PropertyRequestServiceImpl(UserDao userDao,
 	                                   PropertyRequestDao propertyRequestDao,
 	                                   PropertyDao propertyDao,
 	                                   NotificationDao notificationDao,
 	                                   BookingValidationService validationService,
-	                                   NotificationServiceImpl notificationServiceImpl) {
+	                                   NotificationServiceImpl notificationServiceImpl,
+	                                   AuthenticatedUserService authenticatedUserService) {
 		this.userDao = userDao;
 		this.propertyRequestDao = propertyRequestDao;
 		this.propertyDao = propertyDao;
 		this.notificationDao = notificationDao;
 		this.validationService = validationService;
 		this.notificationServiceImpl = notificationServiceImpl;
+		this.authenticatedUserService = authenticatedUserService;
 	}
 
 	public List<BookedDateRangeDTO> getAvailability(Integer propertyId) {
@@ -61,10 +66,20 @@ public class PropertyRequestServiceImpl {
 	}
 
 	public List<OwnerRequestView> getRequestsByOwner(Integer ownerId) {
-		return propertyRequestDao.findOwnerRequestViews(ownerId);
+		User authenticatedUser = authenticatedUserService.requireOwnerOrAdmin();
+		Integer requestedOwnerId = authenticatedUser.getRole() == Role.ADMIN
+				? ownerId
+				: authenticatedUser.getId();
+		return propertyRequestDao.findOwnerRequestViews(requestedOwnerId);
 	}
 
 	public PropertyRequest addRequest(PropertyRequest request) {
+		User authenticatedUser = authenticatedUserService.requireUser();
+		if (authenticatedUser.getRole() == Role.OWNER) {
+			throw new org.springframework.security.access.AccessDeniedException(
+					"Property owners cannot create rental bookings.");
+		}
+		request.setUserId(authenticatedUser.getId());
 		validateTypeSpecificFields(request);
 
 		if (request.getUserId() == null || request.getUserId() <= 0) {
@@ -80,9 +95,22 @@ public class PropertyRequestServiceImpl {
 				.orElseGet(() -> propertyDao.findById(request.getPropertyId())
 						.orElseThrow(() -> new IllegalArgumentException("Property not found with ID: " + request.getPropertyId())));
 
-		// Server-side availability re-check inside the locked transaction
-		if (validationService.hasOverlap(request.getPropertyId(), request.getProposedStart(), request.getProposedEnd())) {
-			throw new IllegalStateException("The selected dates are no longer available for booking.");
+		boolean hourlyBooking = "HOUR".equalsIgnoreCase(property.getPriceUnit());
+		if (hourlyBooking) {
+			validationService.validateHourlyBooking(request, property);
+			if (validationService.hasHourlyOverlap(
+					request.getPropertyId(),
+					request.getProposedStart(),
+					request.getStartTime(),
+					request.getEndTime())) {
+				throw new IllegalStateException("The selected hourly slots are no longer available.");
+			}
+		} else {
+			validateDateRangeBooking(request, property);
+			if (validationService.hasOverlap(request.getPropertyId(), request.getProposedStart(), request.getProposedEnd())) {
+			// Keep date-range overlap behavior unchanged for non-hourly bookings.
+				throw new IllegalStateException("The selected dates are no longer available for booking.");
+			}
 		}
 
 		BookingMode bookingMode = property.getBookingMode() != null ? property.getBookingMode() : BookingMode.INSTANT;
@@ -224,8 +252,25 @@ public class PropertyRequestServiceImpl {
 		if (request.getProposedStart() == null || request.getProposedEnd() == null) {
 			throw new IllegalArgumentException("proposedStart and proposedEnd are required for a rental request");
 		}
-		if (request.getProposedEnd().isBefore(request.getProposedStart())) {
-			throw new IllegalArgumentException("proposedEnd cannot be before proposedStart");
+	}
+
+	private void validateDateRangeBooking(PropertyRequest request, Property property) {
+		if (!request.getProposedStart().isBefore(request.getProposedEnd())) {
+			throw new IllegalArgumentException("proposedEnd must be after proposedStart");
+		}
+		if (request.getProposedStart().isBefore(LocalDate.now())) {
+			throw new IllegalArgumentException("Booking start date cannot be in the past");
+		}
+		if (request.getTeamSize() != null && request.getTeamSize() < 1) {
+			throw new IllegalArgumentException("Guest count must be at least 1");
+		}
+		if (request.getTeamSize() != null
+				&& property.getCapacity() != null
+				&& request.getTeamSize() > property.getCapacity()) {
+			throw new IllegalArgumentException("Guest count cannot exceed the property's capacity");
+		}
+		if (property.getOwnerId() != null && property.getOwnerId().equals(request.getUserId())) {
+			throw new IllegalArgumentException("Property owners cannot book their own property.");
 		}
 	}
 

@@ -3,6 +3,9 @@ package com.officespace.entities;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -44,6 +47,17 @@ public class PropertyRequest {
 	private LocalDate proposedStart;
 
 	private LocalDate proposedEnd;
+
+	@Column(name = "start_time")
+	@JsonFormat(pattern = "HH:mm")
+	private LocalTime startTime;
+
+	@Column(name = "end_time")
+	@JsonFormat(pattern = "HH:mm")
+	private LocalTime endTime;
+
+	@Column(name = "team_size")
+	private Integer teamSize;
 
 	private String message;
 

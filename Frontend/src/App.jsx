@@ -19,6 +19,8 @@ import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import AddProperty from "./pages/AddProperty";
 import OwnerDashboard from "./pages/OwnerDashboard";
+import OwnerProperties from "./pages/OwnerProperties";
+import OwnerBookings from "./pages/OwnerBookings";
 import EditProperty from "./pages/EditProperty";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
@@ -47,10 +49,18 @@ function App() {
           element={<ForgotPassword />}
         />
         <Route
+          path="/properties"
+          element={<OfficeList />}
+        />
+        <Route
           path="/offices"
           element={<OfficeList />}
         />
 
+        <Route
+          path="/property/:id"
+          element={<OfficeDetails />}
+        />
         <Route
           path="/office-details/:id"
           element={<OfficeDetails />}
@@ -140,6 +150,28 @@ function App() {
               allowedRoles={["OWNER", "ADMIN"]}
             >
               <OwnerDashboard />
+            </ProtectedRoute>
+          }
+                />
+
+        <Route
+          path="/owner-properties"
+          element={
+            <ProtectedRoute
+              allowedRoles={["OWNER", "ADMIN"]}
+            >
+              <OwnerProperties />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/owner-bookings"
+          element={
+            <ProtectedRoute
+              allowedRoles={["OWNER", "ADMIN"]}
+            >
+              <OwnerBookings />
             </ProtectedRoute>
           }
         />

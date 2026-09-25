@@ -2,10 +2,12 @@ package com.officespace.mappers;
 
 import com.officespace.dtos.BookedDateRangeDTO;
 import com.officespace.dtos.BookingSummaryDTO;
+import com.officespace.dtos.BookedTimeSlotDTO;
 import com.officespace.dtos.PropertyAvailabilityDTO;
 import com.officespace.entities.Property;
 import com.officespace.entities.PropertyRequest;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +18,7 @@ public class BookingMapper {
             Property property,
             List<BookedDateRangeDTO> dateRanges,
             LocalDate nextAvailableDate,
+            List<BookedTimeSlotDTO> timeSlots,
             long monthlyBookingsCount,
             long holdMinutes
     ) {
@@ -27,7 +30,8 @@ public class BookingMapper {
         dto.setOpeningTime(property.getOpeningTime());
         dto.setClosingTime(property.getClosingTime());
         dto.setSlotDurationMinutes(property.getSlotDurationMinutes());
-        dto.setBookedDateRanges(dateRanges);
+        dto.setBookedDateRanges(dateRanges != null ? dateRanges : Collections.emptyList());
+        dto.setBookedTimeSlots(timeSlots != null ? timeSlots : Collections.emptyList());
         dto.setNextAvailableDate(nextAvailableDate);
         dto.setMonthlyBookingsCount(monthlyBookingsCount);
         dto.setHoldMinutes(holdMinutes);

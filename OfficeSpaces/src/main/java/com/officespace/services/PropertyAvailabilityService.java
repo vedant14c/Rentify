@@ -3,6 +3,7 @@ package com.officespace.services;
 import com.officespace.daos.PropertyDao;
 import com.officespace.daos.PropertyRequestDao;
 import com.officespace.dtos.BookedDateRangeDTO;
+import com.officespace.dtos.BookedTimeSlotDTO;
 import com.officespace.dtos.PropertyAvailabilityDTO;
 import com.officespace.entities.BookingStatus;
 import com.officespace.entities.Property;
@@ -10,6 +11,7 @@ import com.officespace.entities.PropertyRequest;
 import com.officespace.mappers.BookingMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,22 +38,34 @@ public class PropertyAvailabilityService {
     private long holdMinutes;
 
     @Transactional(readOnly = true)
-    public PropertyAvailabilityDTO getPropertyAvailability(Integer propertyId) {
+    public PropertyAvailabilityDTO getPropertyAvailability(Integer propertyId, LocalDate selectedDate) {
         Property property = propertyDao.findById(propertyId)
                 .orElseThrow(() -> new IllegalArgumentException("Property not found with ID: " + propertyId));
 
         LocalDateTime cutoffTime = validationService.getCutoffTime();
         List<BookingStatus> activeStatuses = validationService.getActiveStatuses();
 
-        List<BookedDateRangeDTO> bookedDateRanges = requestDao.findActiveBookingsByPropertyId(
-                propertyId, activeStatuses, BookingStatus.PENDING_PAYMENT, cutoffTime
-        );
-
         List<PropertyRequest> activeRequests = requestDao.findActivePropertyRequestsByPropertyId(
                 propertyId, activeStatuses, BookingStatus.PENDING_PAYMENT, cutoffTime
         );
 
-        LocalDate nextAvailableDate = calculateNextAvailableDate(activeRequests);
+        boolean hourly = "HOUR".equalsIgnoreCase(property.getPriceUnit());
+        List<BookedDateRangeDTO> bookedDateRanges = hourly
+                ? List.of()
+                : requestDao.findActiveBookingsByPropertyId(
+                    propertyId, activeStatuses, BookingStatus.PENDING_PAYMENT, cutoffTime);
+        List<BookedTimeSlotDTO> bookedTimeSlots = hourly
+                ? activeRequests.stream()
+                    .filter(request -> selectedDate != null && selectedDate.equals(request.getProposedStart()))
+                    .filter(request -> request.getStartTime() != null && request.getEndTime() != null)
+                    .map(request -> new BookedTimeSlotDTO(
+                            request.getProposedStart(),
+                            request.getStartTime().toString(),
+                            request.getEndTime().toString(),
+                            request.getStatus()))
+                    .toList()
+                : List.of();
+        LocalDate nextAvailableDate = hourly ? LocalDate.now() : calculateNextAvailableDate(activeRequests);
 
         YearMonth currentMonth = YearMonth.now();
         long monthlyBookingsCount = requestDao.countConfirmedBookingsInMonth(
@@ -65,6 +79,7 @@ public class PropertyAvailabilityService {
                 property,
                 bookedDateRanges,
                 nextAvailableDate,
+                bookedTimeSlots,
                 monthlyBookingsCount,
                 holdMinutes
         );

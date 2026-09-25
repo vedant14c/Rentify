@@ -15,6 +15,7 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
+import { getOwnerBookingRequests } from "../services/bookingService";
 import "../css/navbar.css";
 
 function getLoggedInUser() {
@@ -46,6 +47,30 @@ function Navbar() {
   const isUser = role === "USER";
   const isOwner = role === "OWNER";
   const isAdmin = role === "ADMIN";
+  const isGuest = !token;
+
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    const ownerId = user?.userId || user?.id || localStorage.getItem("userId");
+    if (!ownerId) return;
+
+    let active = true;
+    getOwnerBookingRequests(ownerId)
+      .then((requests) => {
+        if (!active || !Array.isArray(requests)) return;
+        const count = requests.filter(
+          (r) => String(r.status || "").toUpperCase() === "PENDING"
+        ).length;
+        setPendingCount(count);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [isOwner, location.pathname]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -74,6 +99,20 @@ function Navbar() {
     return isActive
       ? "nav-link active"
       : "nav-link";
+  };
+
+  const getIntentNavClass = (targetIntent) => {
+    const isPropsRoute = location.pathname === "/properties" || location.pathname === "/offices";
+    const searchParams = new URLSearchParams(location.search);
+    const currentIntent = searchParams.get("intent")?.toUpperCase();
+    return isPropsRoute && currentIntent === targetIntent ? "nav-link active" : "nav-link";
+  };
+
+  const getAllPropertiesNavClass = () => {
+    const isPropsRoute = location.pathname === "/properties" || location.pathname === "/offices";
+    const searchParams = new URLSearchParams(location.search);
+    const hasIntent = Boolean(searchParams.get("intent"));
+    return isPropsRoute && !hasIntent ? "nav-link active" : "nav-link";
   };
 
   return (
@@ -112,51 +151,93 @@ function Navbar() {
             menuOpen ? "menu-open" : ""
           }`}
         >
-          <NavLink
-            to="/"
-            end
-            className={getNavLinkClass}
-            onClick={closeMenu}
-          >
-            Home
-          </NavLink>
+          {(isUser || isGuest) && (
+            <>
+              <NavLink
+                to="/"
+                end
+                className={getNavLinkClass}
+                onClick={closeMenu}
+              >
+                Home
+              </NavLink>
 
-          <NavLink
-            to="/offices"
-            className={getNavLinkClass}
-            onClick={closeMenu}
-          >
-            Properties
-          </NavLink>
+              <NavLink
+                to="/properties?intent=RENT"
+                className={() => getIntentNavClass("RENT")}
+                onClick={closeMenu}
+              >
+                Rent
+              </NavLink>
 
-          {isUser && !isAdmin && (
-            <NavLink
-              to="/my-bookings"
-              className={getNavLinkClass}
-              onClick={closeMenu}
-            >
-              Bookings
-            </NavLink>
+              <NavLink
+                to="/properties?intent=BUY"
+                className={() => getIntentNavClass("BUY")}
+                onClick={closeMenu}
+              >
+                Buy
+              </NavLink>
+
+              <NavLink
+                to="/properties"
+                className={() => getAllPropertiesNavClass()}
+                onClick={closeMenu}
+              >
+                Properties
+              </NavLink>
+
+              {isUser && (
+                <>
+                  <NavLink
+                    to="/my-bookings"
+                    className={getNavLinkClass}
+                    onClick={closeMenu}
+                  >
+                    Bookings
+                  </NavLink>
+
+                  <NavLink
+                    to="/favorites"
+                    className={getNavLinkClass}
+                    onClick={closeMenu}
+                  >
+                    Favorites
+                  </NavLink>
+                </>
+              )}
+            </>
           )}
 
-          {isUser && !isAdmin && (
-            <NavLink
-              to="/favorites"
-              className={getNavLinkClass}
-              onClick={closeMenu}
-            >
-              Favorites
-            </NavLink>
-          )}
+          {isOwner && (
+            <>
+              <NavLink
+                to="/owner-dashboard"
+                end
+                className={getNavLinkClass}
+                onClick={closeMenu}
+              >
+                Dashboard
+              </NavLink>
 
-          {isOwner && !isAdmin && (
-            <NavLink
-              to="/owner-dashboard"
-              className={getNavLinkClass}
-              onClick={closeMenu}
-            >
-              My Properties
-            </NavLink>
+              <NavLink
+                to="/owner-properties"
+                className={getNavLinkClass}
+                onClick={closeMenu}
+              >
+                My Properties
+              </NavLink>
+
+              <NavLink
+                to="/owner-bookings"
+                className={getNavLinkClass}
+                onClick={closeMenu}
+              >
+                Bookings
+                {pendingCount > 0 && (
+                  <span className="navbar-badge-pill">{pendingCount}</span>
+                )}
+              </NavLink>
+            </>
           )}
 
           {isAdmin && (
@@ -168,6 +249,14 @@ function Navbar() {
               >
                 <FiShield />
                 Dashboard
+              </NavLink>
+
+              <NavLink
+                to="/properties"
+                className={getNavLinkClass}
+                onClick={closeMenu}
+              >
+                Properties
               </NavLink>
 
               <NavLink
@@ -185,7 +274,7 @@ function Navbar() {
                 onClick={closeMenu}
               >
                 <FiCalendar />
-                Requests
+                Bookings
               </NavLink>
             </>
           )}

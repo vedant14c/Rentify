@@ -1,8 +1,10 @@
 import API from "./api";
 
-export const getPropertyAvailability = async (propertyId) => {
+export const getPropertyAvailability = async (propertyId, date) => {
   try {
-    const response = await API.get(`/properties/${propertyId}/availability`);
+    const response = await API.get(`/properties/${propertyId}/availability`, {
+      params: date ? { date } : undefined,
+    });
     if (response.data && response.data.data) {
       return response.data.data;
     }
@@ -25,10 +27,12 @@ export const getPropertyAvailability = async (propertyId) => {
 export const createBookingRequest = async (bookingData) => {
   const response = await API.post("/requests", {
     propertyId: Number(bookingData.propertyId),
-    userId: Number(bookingData.userId),
-    requestType: "RENTAL",
+    requestType: bookingData.requestType || "RENTAL",
     proposedStart: bookingData.proposedStart,
     proposedEnd: bookingData.proposedEnd,
+    startTime: bookingData.startTime || null,
+    endTime: bookingData.endTime || null,
+    teamSize: bookingData.teamSize ? Number(bookingData.teamSize) : null,
     message: bookingData.message || "",
   });
 

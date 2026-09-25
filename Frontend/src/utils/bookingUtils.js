@@ -20,6 +20,14 @@ export function formatDateDisplay(dateStr) {
   });
 }
 
+export function formatTimeDisplay(timeStr) {
+  if (!timeStr) return "";
+  const [hours, minutes] = String(timeStr).slice(0, 5).split(":").map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeStr;
+  const suffix = hours >= 12 ? "PM" : "AM";
+  return `${String(hours % 12 || 12).padStart(2, "0")}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
 export function formatCurrency(amount) {
   const numericAmount = Number(amount) || 0;
   return `₹${numericAmount.toLocaleString("en-IN")}`;
@@ -46,20 +54,30 @@ export function calculateDurationPreview(priceUnit, startDate, endDate, startTim
   const unit = String(priceUnit || "MONTH").toUpperCase();
 
   if (unit === "HOUR") {
-    if (!startTime || !endTime) return { count: 1, text: "1 Hour" };
-    const parseHour = (t) => {
-      let [h] = t.replace(/(AM|PM)/i, "").trim().split(":").map(Number);
-      if (t.toUpperCase().includes("PM") && h < 12) h += 12;
-      if (t.toUpperCase().includes("AM") && h === 12) h = 0;
-      return h;
+    if (!startTime || !endTime) return { count: 0, text: "—" };
+    const parseMinutes = (t) => {
+      const value = String(t).trim().toUpperCase();
+      const isPm = value.includes("PM");
+      const isAm = value.includes("AM");
+      const parts = value.replace("AM", "").replace("PM", "").trim().split(":").map(Number);
+      let hour = parts[0];
+      const minute = parts[1] || 0;
+      if (isPm && hour < 12) hour += 12;
+      if (isAm && hour === 12) hour = 0;
+      return hour * 60 + minute;
     };
-    const startH = parseHour(startTime);
-    const endH = parseHour(endTime);
-    const diff = Math.max(1, endH - startH);
-    return { count: diff, text: `${diff} ${diff === 1 ? "Hour" : "Hours"}` };
+    const diffMinutes = parseMinutes(endTime) - parseMinutes(startTime);
+    if (diffMinutes <= 0) return { count: 0, text: "—" };
+    const count = diffMinutes / 60;
+    const text = Number.isInteger(count)
+      ? `${count} ${count === 1 ? "Hour" : "Hours"}`
+      : `${diffMinutes} Minutes`;
+    return { count: diffMinutes / 60, text };
   }
 
-  if (!startDate || !endDate) return { count: 1, text: `1 ${unit.charAt(0) + unit.slice(1).toLowerCase()}` };
+  if (!startDate || !endDate || endDate <= startDate) {
+    return { count: 0, text: "—" };
+  }
 
   const [y1, m1, d1] = startDate.split("-").map(Number);
   const [y2, m2, d2] = endDate.split("-").map(Number);
@@ -98,6 +116,6 @@ export function calculateTotalPricePreview(basePrice, priceUnit, startDate, endD
   return {
     rate: price,
     durationText: durationInfo.text,
-    total: price * durationInfo.count,
+    total: durationInfo.count > 0 ? price * durationInfo.count : null,
   };
 }

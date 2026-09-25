@@ -2,6 +2,7 @@ package com.officespace.daos;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -79,6 +80,38 @@ public interface PropertyRequestDao extends JpaRepository<PropertyRequest, Integ
 
     @Query("SELECT COUNT(pr) FROM PropertyRequest pr "
          + "WHERE pr.propertyId = :propertyId "
+         + "AND pr.proposedStart = :bookingDate "
+         + "AND pr.startTime < :requestedEndTime "
+         + "AND pr.endTime > :requestedStartTime "
+         + "AND (pr.status IN :activeStatuses OR (pr.status = :pendingPaymentStatus AND pr.createdAt >= :cutoffTime))")
+    long countOverlappingHourlyBookings(
+            @Param("propertyId") Integer propertyId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("requestedStartTime") LocalTime requestedStartTime,
+            @Param("requestedEndTime") LocalTime requestedEndTime,
+            @Param("activeStatuses") List<BookingStatus> activeStatuses,
+            @Param("pendingPaymentStatus") BookingStatus pendingPaymentStatus,
+            @Param("cutoffTime") LocalDateTime cutoffTime);
+
+    @Query("SELECT COUNT(pr) FROM PropertyRequest pr "
+         + "WHERE pr.propertyId = :propertyId "
+         + "AND pr.requestId <> :requestId "
+         + "AND pr.proposedStart = :bookingDate "
+         + "AND pr.startTime < :requestedEndTime "
+         + "AND pr.endTime > :requestedStartTime "
+         + "AND (pr.status IN :activeStatuses OR (pr.status = :pendingPaymentStatus AND pr.createdAt >= :cutoffTime))")
+    long countOverlappingHourlyBookingsExcludingRequest(
+            @Param("propertyId") Integer propertyId,
+            @Param("requestId") Integer requestId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("requestedStartTime") LocalTime requestedStartTime,
+            @Param("requestedEndTime") LocalTime requestedEndTime,
+            @Param("activeStatuses") List<BookingStatus> activeStatuses,
+            @Param("pendingPaymentStatus") BookingStatus pendingPaymentStatus,
+            @Param("cutoffTime") LocalDateTime cutoffTime);
+
+    @Query("SELECT COUNT(pr) FROM PropertyRequest pr "
+         + "WHERE pr.propertyId = :propertyId "
          + "AND pr.status = :confirmedStatus "
          + "AND pr.proposedStart >= :monthStart AND pr.proposedStart <= :monthEnd")
     long countConfirmedBookingsInMonth(
@@ -89,7 +122,8 @@ public interface PropertyRequestDao extends JpaRepository<PropertyRequest, Integ
 
     @Query("SELECT new com.officespace.dtos.OwnerRequestView(pr.requestId, pr.propertyId, p.title, "
          + "pr.userId, u.name, CAST(pr.requestType AS string), pr.offerPrice, pr.proposedStart, "
-         + "pr.proposedEnd, CAST(pr.status AS string), pr.createdAt, CAST(p.bookingMode AS string)) "
+         + "pr.proposedEnd, CAST(pr.status AS string), pr.createdAt, CAST(p.bookingMode AS string), "
+         + "pr.startTime, pr.endTime, pr.teamSize) "
          + "FROM PropertyRequest pr, Property p, User u "
          + "WHERE pr.propertyId = p.propertyId AND pr.userId = u.id AND p.ownerId = :ownerId "
          + "ORDER BY pr.createdAt DESC")

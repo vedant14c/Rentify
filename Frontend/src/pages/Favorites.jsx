@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FiHeart,
+  FiLoader,
   FiTrash2,
 } from "react-icons/fi";
 import OfficeCard from "../components/OfficeCard";
-import offices from "../data/offices";
+import fallbackOffices from "../data/offices";
+import { getApprovedProperties } from "../services/propertyService";
 import "../css/favorites.css";
 
 const FAVORITES_KEY = "officeFavorites";
@@ -23,8 +25,41 @@ function getFavoriteIds() {
 }
 
 function Favorites() {
-  const [favoriteIds, setFavoriteIds] =
-    useState(getFavoriteIds);
+  const [favoriteIds, setFavoriteIds] = useState(getFavoriteIds);
+  const [allProperties, setAllProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProperties = async () => {
+      try {
+        setLoading(true);
+        const backendProps = await getApprovedProperties();
+        if (active) {
+          if (Array.isArray(backendProps) && backendProps.length > 0) {
+            setAllProperties(backendProps);
+          } else {
+            setAllProperties(fallbackOffices);
+          }
+        }
+      } catch {
+        if (active) {
+          setAllProperties(fallbackOffices);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProperties();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const updateFavorites = () => {
@@ -54,9 +89,11 @@ function Favorites() {
     };
   }, []);
 
-  const favoriteOffices = offices.filter(
-    (office) => favoriteIds.includes(office.id)
-  );
+  const favoriteOffices = allProperties.filter((office) => {
+    if (!office) return false;
+    const id = Number(office.propertyId ?? office.id);
+    return favoriteIds.some((favId) => Number(favId) === id);
+  });
 
   const clearAllFavorites = () => {
     const confirmed = window.confirm(
@@ -94,7 +131,14 @@ function Favorites() {
       </section>
 
       <section className="container favorites-content">
-        {favoriteOffices.length > 0 ? (
+        {loading ? (
+          <div className="empty-favorites" style={{ minHeight: "240px" }}>
+            <span className="office-spinner" style={{ display: "inline-block", fontSize: "2rem" }}>
+              <FiLoader className="spin" />
+            </span>
+            <p>Loading your saved properties...</p>
+          </div>
+        ) : favoriteOffices.length > 0 ? (
           <>
             <div className="favorites-toolbar">
               <div>
@@ -120,12 +164,15 @@ function Favorites() {
             </div>
 
             <div className="office-grid">
-              {favoriteOffices.map((office) => (
-                <OfficeCard
-                  key={office.id}
-                  office={office}
-                />
-              ))}
+              {favoriteOffices.map((office) => {
+                const propId = Number(office.propertyId ?? office.id);
+                return (
+                  <OfficeCard
+                    key={propId}
+                    office={office}
+                  />
+                );
+              })}
             </div>
           </>
         ) : (
@@ -142,7 +189,7 @@ function Favorites() {
             </p>
 
             <Link
-              to="/offices"
+              to="/properties"
               className="primary-btn"
             >
               Explore Properties

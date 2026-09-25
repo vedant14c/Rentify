@@ -22,6 +22,10 @@ export async function processRazorpayPayment({ requestId, officeName, user, onSu
       throw new Error(`Invalid payment order payload received from backend: ${JSON.stringify(orderData)}`);
     }
 
+    if (typeof window.Razorpay !== "function") {
+      throw new Error("Razorpay Checkout is unavailable. Please disable ad blockers or try again.");
+    }
+
     return new Promise((resolve, reject) => {
       const options = {
         key: keyId,
@@ -62,8 +66,15 @@ export async function processRazorpayPayment({ requestId, officeName, user, onSu
         },
       };
 
-      const razorpayCheckout = new window.Razorpay(options);
-      razorpayCheckout.open();
+      try {
+        const razorpayCheckout = new window.Razorpay(options);
+        if (!razorpayCheckout || typeof razorpayCheckout.open !== "function") {
+          throw new Error("Razorpay Checkout could not be initialized.");
+        }
+        razorpayCheckout.open();
+      } catch (checkoutError) {
+        reject(new Error(checkoutError.message || "Unable to open Razorpay Checkout."));
+      }
     });
   } catch (err) {
     console.error("Razorpay initiation failed:", err);
